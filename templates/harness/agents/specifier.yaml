@@ -1,0 +1,33 @@
+name: specifier
+description: Turns user intent into accepted Gherkin specifications and end-to-end QA procedures.
+
+# Ambiguity resolution is the hardest judgement in the pipeline: everything
+# downstream is built on what this agent decides the user meant.
+model:
+  claude: opus
+  codex: gpt-5
+effort: xhigh
+status: specifying
+
+tools: [Read, Grep, Glob, Write]
+
+# It writes the contract, never the implementation.
+write_scope:
+  - ".harness/specs/**"
+  - ".harness/qa/**"
+
+rules: [spec-quality, ubiquitous-language]
+
+prompt: prompts/specifier.md
+accepts_from: []
+handoff_to: coder
+
+checklist:
+  - id: intent_restated
+    description: The user's intent is restated in the spec's own words and matches it.
+  - id: scenarios_accepted
+    description: Every scenario is concrete, observable, and free of implementation detail.
+  - id: ambiguities_resolved
+    description: Open questions were either answered or written down as explicit assumptions.
+  - id: qa_procedure_written
+    description: An end-to-end QA procedure exists that a human could follow by hand.

@@ -1,0 +1,34 @@
+#!/bin/sh
+# Fake `claude` CLI. Records how it was invoked, then plays the part of an agent
+# that did its job: writes output.md, and a checklist the pipeline can read.
+#
+# Behaviour is steered entirely by env so a test can script one stage:
+#   HARNESS_FAKE_LOG     file to append the full argv to
+#   HARNESS_FAKE_EXIT    exit code to return (default 0)
+#   HARNESS_FAKE_REJECT  when it matches $HARNESS_AGENT, write reject.txt
+#   HARNESS_FAKE_TOUCH   file (relative to the repo) the "agent" creates
+set -eu
+
+if [ -n "${HARNESS_FAKE_LOG:-}" ]; then
+  printf '%s|%s|%s\n' "${HARNESS_AGENT:-?}" "$(basename "$0")" "$*" >>"$HARNESS_FAKE_LOG"
+fi
+
+# Drain stdin so the caller never blocks on a full pipe.
+cat >/dev/null 2>&1 || true
+
+state=${HARNESS_STATE_DIR:-}
+if [ -n "$state" ]; then
+  mkdir -p "$state"
+  printf 'fake %s finished %s\n' "${HARNESS_AGENT:-?}" "${HARNESS_TASK:-?}" >"$state/output.md"
+  : >"$state/checklist.env"
+  if [ -n "${HARNESS_FAKE_REJECT:-}" ] && [ "${HARNESS_FAKE_REJECT}" = "${HARNESS_AGENT:-}" ]; then
+    printf 'fake rejection from %s\n' "$HARNESS_AGENT" >"$state/reject.txt"
+  fi
+fi
+
+if [ -n "${HARNESS_FAKE_TOUCH:-}" ] && [ -n "${HARNESS_ROOT:-}" ]; then
+  mkdir -p "$(dirname "$HARNESS_ROOT/$HARNESS_FAKE_TOUCH")"
+  printf 'written by the fake agent\n' >"$HARNESS_ROOT/$HARNESS_FAKE_TOUCH"
+fi
+
+exit "${HARNESS_FAKE_EXIT:-0}"

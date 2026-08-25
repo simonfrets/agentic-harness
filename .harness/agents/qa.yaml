@@ -1,0 +1,40 @@
+name: qa
+description: Turns the specifier's QA procedures into executable scripts, runs final verification, checks handoff consistency, and notifies on completion.
+
+# Mechanical translation plus a careful read of the whole trail.
+model:
+  claude: sonnet
+  codex: gpt-5-codex
+effort: medium
+status: qa
+
+tools:
+  - Read
+  - Write
+  - Grep
+  - Glob
+  - "Bash(sh .harness/qa:*)"
+  - "Bash(npm test:*)"
+  - "Bash(npm run build:*)"
+  - "Bash(harness task show:*)"
+
+write_scope:
+  - ".harness/qa/**"
+
+rules: [qa-verification]
+
+prompt: prompts/qa.md
+accepts_from: [hardener]
+# No handoff_to: this is the final stage, so a successful handoff means done.
+
+checklist:
+  - id: procedures_executable
+    description: Every QA procedure the specifier wrote now exists as a runnable script.
+  - id: procedures_pass
+    description: Those scripts were run against a real build and passed.
+  - id: handoff_consistent
+    description: Every upstream checklist claim was spot-checked against the actual diff.
+  - id: spec_satisfied
+    description: Each accepted scenario is demonstrably satisfied by the delivered behavior.
+  - id: notified
+    description: The completion notification was sent.

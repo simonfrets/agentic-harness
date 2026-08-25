@@ -1,0 +1,6 @@
+# TDD pair gate, installed by `harness init`.
+#
+# This runs on commit-msg rather than pre-commit because this is the first hook
+# where the commit message -- and so the [skip-tdd: <reason>] escape hatch -- is
+# readable.
+sh node_modules/agentic-harness/runtime/tdd/guard.sh --message "$1"

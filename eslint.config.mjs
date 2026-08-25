@@ -5,7 +5,9 @@ import tseslint from 'typescript-eslint';
 
 export default defineConfig(
   {
-    ignores: ['dist/**', 'node_modules/**', 'coverage/**', '.claude/**', '.harness/state/**'],
+    // templates/ is scaffolding for *other* projects: it is not part of this
+    // program and cannot be type-checked against this tsconfig.
+    ignores: ['dist/**', 'node_modules/**', 'coverage/**', '.claude/**', 'templates/**', '.harness/state/**'],
   },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,

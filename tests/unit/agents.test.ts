@@ -104,6 +104,23 @@ describe('compileToClaudeMarkdown', () => {
     expect(md).toContain('Read, Edit, Write, Bash(npm test:*)');
     expect(md).toContain('You implement one slice at a time.');
   });
+
+  it('keeps each frontmatter value on one line', () => {
+    const paths = seedProject();
+    write(
+      `${paths.agents}/coder.yaml`,
+      CODER.replace(
+        'tools: [Read, Edit, Write, "Bash(npm test:*)"]',
+        'tools: [Read, Edit, Write, Grep, Glob, "Bash(npm test:*)", "Bash(npm run lint:*)", "Bash(git add:*)", "Bash(git status:*)", "Bash(git diff:*)"]',
+      ),
+    );
+    const frontmatter = compileToClaudeMarkdown(paths, loadAgent(paths, 'coder')).split('---')[1] ?? '';
+    // YAML would fold a long value across lines. It still parses, but a tools
+    // list split mid-entry is a trap for anyone reading or editing the file.
+    for (const line of frontmatter.split('\n')) {
+      expect(line).not.toMatch(/^\s{2,}\S/);
+    }
+  });
 });
 
 describe('renderAgentEnv', () => {
