@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.DS_Store
+
+# Harness runtime state is machine-local; config and tasks.yaml are committed.
+.harness/state/
+.harness/locks/
+.harness/logs/
+.harness/metrics/
