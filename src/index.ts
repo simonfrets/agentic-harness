@@ -21,10 +21,31 @@ export type { AgentId, BuiltInAgentId } from "./agents/agent-id.js";
 export { loadRuleBundle } from "./rules/load-rule-bundle.js";
 export type { LoadRuleBundleOptions } from "./rules/load-rule-bundle.js";
 export {
+  RuleResolutionError,
   RuleValidationError,
   formatRuleIssue,
   formatRuleIssues,
 } from "./rules/rule-error.js";
+export {
+  RULE_SET_HASH_VERSION,
+  canonicalRule,
+  canonicalRuleSet,
+  canonicalStringify,
+  compareCodeUnits,
+  hashRuleSet,
+  normalizeText,
+} from "./rules/hash-rule-set.js";
+export type { CanonicalObject, CanonicalValue } from "./rules/hash-rule-set.js";
+export {
+  RULE_ORIGIN_PRECEDENCE,
+  resolveRuleSet,
+} from "./rules/resolve-rule-set.js";
+export type {
+  ResolvedRule,
+  ResolvedRuleSet,
+  RuleOrigin,
+  RuleSource,
+} from "./rules/resolve-rule-set.js";
 export type { RuleIssue, RuleSourceLocation } from "./rules/rule-error.js";
 export {
   DEFAULT_CHECK_TIMEOUT_MS,
