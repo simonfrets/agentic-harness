@@ -41,6 +41,7 @@ const PUBLIC_API = [
   "checkSchema",
   "commandSucceeded",
   "compareCodeUnits",
+  "compileAgentPolicy",
   "createNodeCommandRunner",
   "describeCommand",
   "describeCommandResult",
