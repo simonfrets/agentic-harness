@@ -7,6 +7,8 @@ import { harnessPaths, requireHarnessRoot, type HarnessPaths } from '../core/pat
 import { loadRules } from '../core/rules/load';
 import type { Rule } from '../core/rules/schema';
 
+export { runtimeDir } from '../core/paths';
+
 export interface Session {
   root: string;
   paths: HarnessPaths;
@@ -19,11 +21,6 @@ export function session(cwd = process.cwd()): Session {
   const root = requireHarnessRoot(cwd);
   const paths = harnessPaths(root);
   return { root, paths, config: loadConfig(paths), rules: loadRules(paths) };
-}
-
-/** The shipped shell runtime, resolved relative to this file in src or dist. */
-export function runtimeDir(): string {
-  return path.resolve(__dirname, '..', '..', 'runtime');
 }
 
 export function templatesDir(): string {
