@@ -1,0 +1,4 @@
+# TDD pair gate. Runs here rather than pre-commit because this is the first
+# hook where the commit message -- and therefore the [skip-tdd: ...] escape
+# hatch -- is readable.
+sh runtime/tdd/guard.sh --message "$1"
