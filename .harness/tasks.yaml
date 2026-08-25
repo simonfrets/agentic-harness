@@ -1,0 +1,6 @@
+# The shared work record. Committed -- this is how a task survives a session.
+# Mutated only through `harness task set` / `harness handoff`, which write it
+# atomically under a lock so two running agents cannot clobber each other.
+version: 1
+pipeline: [specifier, coder, cleaner, architect, hardener, qa]
+tasks: []

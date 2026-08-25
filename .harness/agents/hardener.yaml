@@ -1,0 +1,44 @@
+name: hardener
+description: Mutation hardening, language mutation, CRAP and DRY verification, and soft Gherkin mutation.
+
+# Adversarial work: the job is to find the change that breaks the code without
+# breaking a test. That is the hardest reasoning in the pipeline.
+model:
+  claude: opus
+  codex: gpt-5
+effort: xhigh
+status: hardening
+
+tools:
+  - Read
+  - Edit
+  - Write
+  - Grep
+  - Glob
+  - "Bash(npm test:*)"
+  - "Bash(npm run test:cov:*)"
+  - "Bash(npx jest:*)"
+  - "Bash(harness metrics crap:*)"
+
+# tests/** only. Barred from src/, the only way to close a hole is a better
+# test -- which is the entire point of this stage.
+write_scope:
+  - "tests/**"
+
+rules: [tdd, coverage-floor, crap-threshold]
+
+prompt: prompts/hardener.md
+accepts_from: [architect]
+handoff_to: qa
+
+checklist:
+  - id: mutants_attempted
+    description: Concrete mutation sites were tried; each survivor is listed.
+  - id: survivors_killed
+    description: Every surviving mutant is now killed by a test, or justified in writing.
+  - id: language_mutation_done
+    description: Wording of specs and assertions was varied to catch tests that pass by coincidence.
+  - id: gherkin_mutation_done
+    description: Soft variations of the accepted scenarios were checked against the implementation.
+  - id: crap_dry_verified
+    description: The cleaner's CRAP and DRY claims were independently re-checked.

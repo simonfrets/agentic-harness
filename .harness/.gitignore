@@ -1,0 +1,5 @@
+# harness runtime state is machine-local
+state/
+locks/
+logs/
+metrics/

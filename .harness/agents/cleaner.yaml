@@ -1,0 +1,42 @@
+name: cleaner
+description: Behavior-preserving cleanup, coverage improvement, CRAP and DRY review, and mutation-site scans.
+
+# Bounded, verifiable work: the test suite is the oracle for every change.
+model:
+  claude: sonnet
+  codex: gpt-5-codex
+effort: medium
+status: cleaning
+
+tools:
+  - Read
+  - Edit
+  - Write
+  - Grep
+  - Glob
+  - "Bash(npm test:*)"
+  - "Bash(npm run test:cov:*)"
+  - "Bash(harness metrics crap:*)"
+  - "Bash(npx jest:*)"
+
+write_scope:
+  - "src/**"
+  - "tests/**"
+
+rules: [tdd, code-style, no-orphan-code, coverage-floor, crap-threshold]
+
+prompt: prompts/cleaner.md
+accepts_from: [coder]
+handoff_to: architect
+
+checklist:
+  - id: behavior_preserved
+    description: The suite passed before and after, with no test edited to accommodate a refactor.
+  - id: coverage_not_worse
+    description: Coverage is at or above where this stage started.
+  - id: crap_reviewed
+    description: The worst CRAP offenders were either improved or explicitly justified.
+  - id: dry_reviewed
+    description: Genuine duplication was removed; incidental similarity was left alone.
+  - id: mutation_sites_listed
+    description: Weak spots a mutant would survive are listed in the handoff for the hardener.

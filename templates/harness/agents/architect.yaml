@@ -1,0 +1,33 @@
+name: architect
+description: Reviews module structure, boundaries, dependency direction and property-test coverage.
+
+# Structural judgement across a whole codebase, and the authority to send work
+# back -- worth the strongest model at the highest effort.
+model:
+  claude: opus
+  codex: gpt-5
+effort: xhigh
+status: architecture-review
+
+# Deliberately read-only over src/: an architect who edits the code stops being
+# a reviewer. Findings go back to the coder as a rejection.
+tools: [Read, Grep, Glob, Write]
+
+write_scope:
+  - "docs/adr/**"
+
+rules: [architecture, code-style]
+
+prompt: prompts/architect.md
+accepts_from: [cleaner]
+handoff_to: hardener
+
+checklist:
+  - id: boundaries_reviewed
+    description: Module seams were checked against what each module actually exposes.
+  - id: dependency_direction_ok
+    description: Dependencies point toward stability; no new cycles were introduced.
+  - id: interface_depth_ok
+    description: New interfaces hide more than they expose; no shallow pass-through layers.
+  - id: property_coverage_reviewed
+    description: Invariants that deserve property tests are identified and recorded.
