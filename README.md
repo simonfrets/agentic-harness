@@ -9,12 +9,15 @@ and runtime under that project's `.harness/` directory.
 
 ## Current status
 
-This branch implements the rule and gate kernel: rule bundles are validated,
-layered, hashed, compiled into agent policies, and executed as phase gates.
+This branch implements the rule and gate kernel and the command line entry
+point: rule bundles are validated, layered, hashed, compiled into agent
+policies, executed as phase gates, and reachable from a `harness` executable.
 
-The CLI, the `.harness/` installer, Git hook dispatch, task state, and the
-Codex and Claude adapters are **not** implemented yet. Nothing here installs
-into another project.
+The `.harness/` installer, Git hook dispatch, task state, and the Codex and
+Claude adapters are **not** implemented yet. `harness init` and
+`harness doctor` report themselves as unavailable, and nothing here installs
+into another project: the CLI reads a `.harness/` directory that has to be
+created by hand for now.
 
 ## Requirements
 
@@ -49,6 +52,38 @@ script.
 
 The pre-commit hook runs staged formatting and ESLint fixes, followed by the
 full lint, type-check, shell syntax, and Jest gates.
+
+## Command line
+
+```sh
+harness <command> [options]
+```
+
+| Command                               | Behaviour                                     |
+| ------------------------------------- | --------------------------------------------- |
+| `harness rules validate`              | Load and resolve every bundle; print the hash |
+| `harness rules explain`               | List the resolved rules with their origins    |
+| `harness rules explain --agent coder` | Print that agent's compiled policy            |
+| `harness gate <phase>`                | Run the checks that apply to a workflow phase |
+| `harness init` / `doctor`             | Not available in this build                   |
+
+Rules are read from the project the command is run in. The working tree root
+is resolved with `git rev-parse --show-toplevel`, so a command works from any
+subdirectory. `.harness/rules/*.yaml` is the `builtin` precedence layer and
+`.harness/rules/custom/*.yaml` is the `project` layer, so a project replaces a
+shipped rule by declaring the same rule id with `overrides: true`.
+
+Exit codes are part of the contract, because a hook or a CI step branches on
+them:
+
+| Code | Meaning                                       |
+| ---- | --------------------------------------------- |
+| 0    | Success                                       |
+| 1    | Unexpected failure                            |
+| 2    | The command line could not be understood      |
+| 3    | Invalid or missing harness configuration      |
+| 4    | A required check failed and blocked the phase |
+| 5    | The action was unsafe and was not taken       |
 
 ## Testing shell scripts
 

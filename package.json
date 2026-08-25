@@ -11,6 +11,9 @@
       "import": "./dist/index.js"
     }
   },
+  "bin": {
+    "harness": "./dist/cli/index.js"
+  },
   "files": [
     "dist",
     "templates",

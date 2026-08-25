@@ -1,4 +1,4 @@
-export const HARNESS_DIRECTORY = ".harness" as const;
+import { HARNESS_DIRECTORY } from "./harness/layout.js";
 
 export interface HarnessPackageMetadata {
   readonly directory: typeof HARNESS_DIRECTORY;
@@ -11,6 +11,19 @@ export const harnessPackageMetadata = {
 } as const satisfies HarnessPackageMetadata;
 
 export {
+  HARNESS_DIRECTORY,
+  HARNESS_PATHS,
+  harnessPath,
+} from "./harness/layout.js";
+export { HARNESS_ERROR_KINDS, HarnessError } from "./harness/harness-error.js";
+export type { HarnessErrorKind } from "./harness/harness-error.js";
+export { readPackageVersion } from "./harness/package-version.js";
+export { resolveProjectRoot } from "./harness/resolve-project-root.js";
+export type { ResolveProjectRootOptions } from "./harness/resolve-project-root.js";
+export { loadHarnessRuleSet } from "./harness/load-harness-rule-set.js";
+export type { LoadHarnessRuleSetOptions } from "./harness/load-harness-rule-set.js";
+
+export {
   BUILT_IN_AGENT_IDS,
   agentIdSchema,
   isBuiltInAgentId,
@@ -19,6 +32,8 @@ export {
 export type { AgentId, BuiltInAgentId } from "./agents/agent-id.js";
 
 export { loadRuleBundle } from "./rules/load-rule-bundle.js";
+export { loadRuleDirectory } from "./rules/load-rule-directory.js";
+export type { LoadRuleDirectoryOptions } from "./rules/load-rule-directory.js";
 export type { LoadRuleBundleOptions } from "./rules/load-rule-bundle.js";
 export {
   RuleResolutionError,
@@ -152,3 +167,26 @@ export type {
   PhaseGateStatus,
   RunPhaseGatesOptions,
 } from "./gates/run-phase-gates.js";
+
+export { CLI_COMMANDS, parseCliArguments } from "./cli/parse-cli-arguments.js";
+export type {
+  CliCommand,
+  CliInvocation,
+  CliParseResult,
+} from "./cli/parse-cli-arguments.js";
+export { CLI_EXIT_CODES, exitCodeForHarnessError } from "./cli/exit-codes.js";
+export { runCli } from "./cli/run-cli.js";
+export type {
+  CliCommandHandler,
+  CliCommandRegistry,
+  CliContext,
+  CliStream,
+  CliStreams,
+  RunCliOptions,
+} from "./cli/run-cli.js";
+export { createDefaultCliCommands } from "./cli/default-commands.js";
+export { formatPhaseGateReport } from "./cli/format-gate-report.js";
+export {
+  formatRuleSetExplanation,
+  formatRuleSetSummary,
+} from "./cli/format-rule-set.js";
