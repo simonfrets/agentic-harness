@@ -46,3 +46,23 @@ export class RuleValidationError extends Error {
     this.issues = issues;
   }
 }
+
+/**
+ * Raised when two rule sources declare the same rule id and the conflict was
+ * not resolved by an explicit `overrides: true`.
+ */
+export class RuleResolutionError extends Error {
+  public readonly ruleId: string;
+  public readonly origins: readonly string[];
+
+  public constructor(ruleId: string, origins: readonly string[]) {
+    super(
+      `rule \`${ruleId}\` is declared by more than one source (${origins.join(
+        ", "
+      )}); set \`overrides: true\` on the higher-precedence rule to replace it deliberately`
+    );
+    this.name = "RuleResolutionError";
+    this.ruleId = ruleId;
+    this.origins = origins;
+  }
+}
