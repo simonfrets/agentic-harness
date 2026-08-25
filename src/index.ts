@@ -128,3 +128,6 @@ export type {
   SpawnFailedCommandResult,
   TimedOutCommandResult,
 } from "./processes/command-runner.js";
+
+export { compileAgentPolicy } from "./prompts/compile-agent-policy.js";
+export type { CompileAgentPolicyInput } from "./prompts/compile-agent-policy.js";
