@@ -1,0 +1,23 @@
+version: 1
+id: cleaner
+displayName: Cleaner
+summary: >
+  Makes behaviour-preserving improvements to code that already passes, and
+  proves the behaviour did not move.
+modelProfile: coding-high
+
+tools:
+  read: true
+  search: true
+  edit: true
+  execute: true
+
+writeScopes:
+  - "src/**"
+  - "tests/**"
+
+projectScripts:
+  - build
+  - lint
+  - test
+  - typecheck

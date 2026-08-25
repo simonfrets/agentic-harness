@@ -1,0 +1,24 @@
+version: 1
+id: qa
+displayName: QA
+summary: >
+  Runs the accepted QA procedure against the finished change and checks the
+  handoff record is consistent with what actually ran.
+modelProfile: verification
+
+tools:
+  read: true
+  search: true
+  edit: true
+  execute: true
+
+# Acceptance scripts and Gherkin evidence, never production source. QA that can
+# edit the implementation can make a failing acceptance pass by changing the
+# thing being accepted.
+writeScopes:
+  - "docs/qa/**"
+  - "features/**"
+
+projectScripts:
+  - build
+  - test
