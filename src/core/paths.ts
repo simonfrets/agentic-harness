@@ -90,6 +90,15 @@ export function taskStateDir(paths: HarnessPaths, taskId: string, agent: string)
   return path.join(paths.state, taskId, agent);
 }
 
+/**
+ * The shipped shell runtime, resolved relative to this file whether it is
+ * running from `src/` or `dist/`. Rule checks are handed this so they never
+ * have to guess at a node_modules layout.
+ */
+export function runtimeDir(): string {
+  return path.resolve(__dirname, '..', '..', 'runtime');
+}
+
 export function taskEventLog(paths: HarnessPaths, taskId: string): string {
   return path.join(paths.events, `${taskId}.jsonl`);
 }

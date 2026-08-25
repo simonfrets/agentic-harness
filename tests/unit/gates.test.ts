@@ -230,6 +230,12 @@ describe('rule gates', () => {
     expect(gates(fixture).find((r) => r.id === 'rule:branch-naming')).toBeUndefined();
   });
 
+  it('tells the check where the shipped runtime is, so it need not guess', () => {
+    const fixture = seed();
+    seedRule(fixture, '#!/bin/sh\n[ -f "$HARNESS_RUNTIME_DIR/tdd/guard.sh" ]\n');
+    expect(outcome(gates(fixture), 'rule:branch-naming').result).toBe('pass');
+  });
+
   it('tells the check which task and agent it is judging', () => {
     const fixture = seed();
     seedRule(fixture, '#!/bin/sh\n[ "$HARNESS_TASK" = T-001 ] && [ "$HARNESS_AGENT" = coder ]\n');

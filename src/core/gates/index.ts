@@ -9,7 +9,7 @@ import type { AgentDefinition } from '../agents/schema';
 import type { HarnessConfig } from '../config/schema';
 import { loadConfig } from '../config/load';
 import type { HarnessPaths } from '../paths';
-import { taskStateDir } from '../paths';
+import { runtimeDir, taskStateDir } from '../paths';
 import { blockingRulesFor } from '../rules/load';
 import type { Rule } from '../rules/schema';
 import type { GateResult, Task } from '../tasks/schema';
@@ -276,6 +276,7 @@ function ruleGate(
       HARNESS_DIR: paths.dir,
       HARNESS_TASK: task.id,
       HARNESS_AGENT: agent.name,
+      HARNESS_RUNTIME_DIR: runtimeDir(),
     },
   });
 

@@ -7,11 +7,18 @@
 # Env provided by the harness: HARNESS_ROOT, HARNESS_DIR, HARNESS_TASK, HARNESS_AGENT.
 set -eu
 
-guard=$(node -e 'process.stdout.write(require.resolve("agentic-harness/package.json"))' 2>/dev/null || true)
-if [ -n "$guard" ]; then
-  guard="$(dirname "$guard")/runtime/tdd/guard.sh"
+# The harness tells every check where its own runtime lives, so this never has
+# to guess at a node_modules layout. The fallbacks are for running the check by
+# hand, outside a handoff.
+if [ -n "${HARNESS_RUNTIME_DIR:-}" ]; then
+  guard="$HARNESS_RUNTIME_DIR/tdd/guard.sh"
 else
-  guard="${HARNESS_ROOT:-.}/node_modules/agentic-harness/runtime/tdd/guard.sh"
+  pkg=$(node -e 'process.stdout.write(require.resolve("agentic-harness/package.json"))' 2>/dev/null || true)
+  if [ -n "$pkg" ]; then
+    guard="$(dirname "$pkg")/runtime/tdd/guard.sh"
+  else
+    guard="${HARNESS_ROOT:-.}/node_modules/agentic-harness/runtime/tdd/guard.sh"
+  fi
 fi
 
 if [ ! -f "$guard" ]; then
