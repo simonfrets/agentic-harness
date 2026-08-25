@@ -131,3 +131,24 @@ export type {
 
 export { compileAgentPolicy } from "./prompts/compile-agent-policy.js";
 export type { CompileAgentPolicyInput } from "./prompts/compile-agent-policy.js";
+
+export {
+  buildPackageManagerCommand,
+  resolveProjectScript,
+} from "./gates/resolve-project-script.js";
+export type {
+  ProjectScriptResolution,
+  ResolveProjectScriptInput,
+} from "./gates/resolve-project-script.js";
+export {
+  createDefaultReportId,
+  createDeterministicReportId,
+  runPhaseGates,
+} from "./gates/run-phase-gates.js";
+export type {
+  GateResult,
+  GateStatus,
+  PhaseGateReport,
+  PhaseGateStatus,
+  RunPhaseGatesOptions,
+} from "./gates/run-phase-gates.js";
