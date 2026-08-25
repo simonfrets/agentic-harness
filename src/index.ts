@@ -30,6 +30,38 @@ export {
   mapBuiltInAgents,
 } from "./agents/agent-id.js";
 export type { AgentId, BuiltInAgentId } from "./agents/agent-id.js";
+export {
+  MODEL_PROFILES,
+  agentDefinitionSchema,
+  agentToolsSchema,
+  loadAgentDefinition,
+  modelProfileSchema,
+} from "./agents/agent-definition.js";
+export type {
+  AgentDefinition,
+  AgentTools,
+  ModelProfile,
+} from "./agents/agent-definition.js";
+
+export { loadYamlConfig } from "./config/load-yaml-config.js";
+export type { LoadYamlConfigOptions } from "./config/load-yaml-config.js";
+export {
+  loadProjectConfig,
+  projectConfigSchema,
+} from "./config/project-config.js";
+export type { ProjectConfig } from "./config/project-config.js";
+export {
+  EXISTING_HOOK_POLICIES,
+  existingHookPolicySchema,
+  hooksConfigSchema,
+  loadHooksConfig,
+  managedHookSchema,
+} from "./config/hooks-config.js";
+export type {
+  ExistingHookPolicy,
+  HooksConfig,
+  ManagedHook,
+} from "./config/hooks-config.js";
 
 export { loadRuleBundle } from "./rules/load-rule-bundle.js";
 export { loadRuleDirectory } from "./rules/load-rule-directory.js";

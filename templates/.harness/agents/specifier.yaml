@@ -1,0 +1,23 @@
+version: 1
+id: specifier
+displayName: Specifier
+summary: >
+  Turns a request into an approved specification and an executable QA
+  procedure, before any production code exists.
+modelProfile: reasoning-high
+
+tools:
+  read: true
+  search: true
+  edit: true
+  execute: false
+
+# Specifications and Gherkin features are project artifacts and belong in
+# review. Production source is not writable here: a specification that quietly
+# edits the code it describes can no longer disagree with it, which is the one
+# thing it exists to do.
+writeScopes:
+  - "docs/specs/**"
+  - "features/**"
+
+projectScripts: []

@@ -136,6 +136,56 @@ The resolved rule set has a SHA-256 over its effective content alone: bundle
 ids, file paths, key order, comments, quoting style, and line endings do not
 affect it, so the same logical rules hash identically on any machine.
 
+## Agent definitions and configuration
+
+`templates/.harness/agents/` ships one definition per built-in agent, and
+`templates/.harness/config/` ships the two settings files the installer will
+place alongside them. Both are validated by the test suite, so a shipped
+template that stops matching its schema fails the build.
+
+```yaml
+version: 1
+id: hardener
+displayName: Hardener
+summary: >
+  Attacks the test suite: finds the cases the tests do not cover and adds them,
+  without repairing the production code they expose.
+modelProfile: coding-high
+
+tools:
+  read: true
+  search: true
+  edit: true
+  execute: true
+
+writeScopes:
+  - "tests/**"
+
+projectScripts:
+  - test
+  - typecheck
+```
+
+`modelProfile` is a logical name — `coding-high`, `reasoning-high`, or
+`verification`. Provider-specific model identifiers are deliberately absent, so
+a definition is portable across adapters.
+
+`tools` and `writeScopes` have to agree: an agent that declares `edit: true`
+must name a write scope, and one that declares `edit: false` must not.
+Otherwise the runtime has two answers about what an agent may change, and
+whichever it happens to read becomes the real policy by accident. The same
+applies to `execute` and `projectScripts`.
+
+`config/project.yaml` carries only the two decisions discovery cannot make: the
+validation mode, and a pinned package manager for a repository that carries two
+lockfiles. `config/hooks.yaml` says which Git hooks are managed and what to do
+when the project already has one — `chain` runs the existing hook and then the
+harness gate, `abort` stops. There is no `replace`.
+
+These files are shipped and validated; no runtime yet reads an installed copy.
+Installation is Milestone B3, hook dispatch is B4, and tool enforcement belongs
+to the provider adapters.
+
 ## Phase gates
 
 `runPhaseGates` runs the checks that apply to a phase and returns a serialisable
@@ -163,6 +213,6 @@ installed.
 
 - Self-contained `.harness/` installer and diagnostics
 - Typed Codex and Claude CLI adapter contract
-- Isolated agent definitions and model/tool policies
+- Runtime enforcement of the shipped agent tool policies
 - Atomic `tasks.yaml` state and resumable handoffs
 - Specifier, coder, cleaner, architect, hardener, and QA agents

@@ -2,11 +2,16 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
+import { loadAgentDefinition } from "../../../src/agents/agent-definition.js";
+import type { AgentDefinition } from "../../../src/agents/agent-definition.js";
 import { BUILT_IN_AGENT_IDS } from "../../../src/agents/agent-id.js";
+import { loadHooksConfig } from "../../../src/config/hooks-config.js";
+import { loadProjectConfig } from "../../../src/config/project-config.js";
 import {
   listHarnessTemplateFiles,
   readHarnessTemplateFile,
 } from "../../../src/install/harness-templates.js";
+import { HOOK_NAMES } from "../../../src/project/project-profile-schema.js";
 import { compileAgentPolicy } from "../../../src/prompts/compile-agent-policy.js";
 import { loadRuleBundle } from "../../../src/rules/load-rule-bundle.js";
 import { resolveRuleSet } from "../../../src/rules/resolve-rule-set.js";
@@ -179,6 +184,134 @@ describe("the shipped .gitignore", () => {
       ".harness/bin/harness",
     ]) {
       expect(isIgnored(root, path)).toBe(false);
+    }
+  });
+});
+
+const agentFiles = listHarnessTemplateFiles(packageRoot).filter((file) =>
+  /^agents\/[^/]+\.yaml$/.test(file.installedPath)
+);
+
+const definitions: readonly AgentDefinition[] = agentFiles.map((file) =>
+  loadAgentDefinition(readHarnessTemplateFile(packageRoot, file), {
+    source: file.installedPath,
+  })
+);
+
+const definitionOf = (id: string): AgentDefinition => {
+  const found = definitions.find((definition) => definition.id === id);
+
+  if (found === undefined) {
+    throw new Error(`no shipped definition for ${id}`);
+  }
+
+  return found;
+};
+
+describe("the shipped agent definitions", () => {
+  it("ships one definition per built-in agent", () => {
+    expect(definitions.map((definition) => definition.id)).toEqual([
+      ...BUILT_IN_AGENT_IDS,
+    ]);
+  });
+
+  it("names each file after the agent it defines", () => {
+    for (const [index, definition] of definitions.entries()) {
+      expect(agentFiles[index]?.installedPath).toBe(
+        `agents/${definition.id}.yaml`
+      );
+    }
+  });
+
+  it("displays qa as QA rather than a capitalised identifier", () => {
+    expect(definitionOf("qa").displayName).toBe("QA");
+  });
+
+  it("gives every agent a summary a human can act on", () => {
+    for (const definition of definitions) {
+      expect(definition.summary.trim().length).toBeGreaterThan(40);
+      expect(definition.summary).not.toMatch(/TODO|TBD|placeholder|FIXME/i);
+    }
+  });
+
+  it("names no provider or model id", () => {
+    for (const file of agentFiles) {
+      const text = readHarnessTemplateFile(packageRoot, file);
+
+      expect(text).not.toMatch(/claude|codex|gpt|anthropic|openai/i);
+    }
+  });
+
+  it("keeps the reviewing agents out of production source", () => {
+    // An architect that can edit what it reviews is not a second opinion, and
+    // a hardener that can repair production code can make its own failing test
+    // pass instead of reporting the defect it found.
+    expect(definitionOf("architect").tools.edit).toBe(false);
+    expect(definitionOf("architect").writeScopes).toEqual([]);
+    expect(definitionOf("hardener").writeScopes).toEqual(["tests/**"]);
+  });
+
+  it("lets no agent edit production source except the coder and the cleaner", () => {
+    const writesSource = definitions
+      .filter((definition) =>
+        definition.writeScopes.some((scope) => scope.startsWith("src/"))
+      )
+      .map((definition) => definition.id);
+
+    expect(writesSource).toEqual(["cleaner", "coder"]);
+  });
+
+  it("never lets an agent run a script that rewrites the working tree", () => {
+    for (const definition of definitions) {
+      expect(definition.projectScripts).not.toContain("format");
+    }
+  });
+
+  it("grants no script allowance without the capability to execute", () => {
+    for (const definition of definitions) {
+      expect(
+        definition.projectScripts.length === 0 || definition.tools.execute
+      ).toBe(true);
+    }
+  });
+});
+
+describe("the shipped config files", () => {
+  const readConfig = (installedPath: string): string =>
+    readHarnessTemplateFile(packageRoot, {
+      templatePath: installedPath,
+      installedPath,
+    });
+
+  it("defaults the project to native-plus-harness validation", () => {
+    const config = loadProjectConfig(readConfig("config/project.yaml"), {
+      source: "config/project.yaml",
+    });
+
+    expect(config).toEqual({
+      version: 1,
+      validationMode: "native-plus-harness",
+      packageManager: null,
+    });
+  });
+
+  it("manages both git hooks and chains onto whatever is already there", () => {
+    const config = loadHooksConfig(readConfig("config/hooks.yaml"), {
+      source: "config/hooks.yaml",
+    });
+
+    expect(config.onExistingHook).toBe("chain");
+    expect(config.hooks.map((entry) => entry.hook)).toEqual([...HOOK_NAMES]);
+  });
+
+  it("runs each hook endpoint at its own phase", () => {
+    const config = loadHooksConfig(readConfig("config/hooks.yaml"), {
+      source: "config/hooks.yaml",
+    });
+
+    for (const entry of config.hooks) {
+      expect(entry.enabled).toBe(true);
+      expect(entry.phase).toBe(entry.hook);
     }
   });
 });

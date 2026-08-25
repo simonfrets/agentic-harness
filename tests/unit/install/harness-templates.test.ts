@@ -22,6 +22,14 @@ describe("listHarnessTemplateFiles", () => {
       listHarnessTemplateFiles(packageRoot).map((file) => file.installedPath)
     ).toEqual([
       ".gitignore",
+      "agents/architect.yaml",
+      "agents/cleaner.yaml",
+      "agents/coder.yaml",
+      "agents/hardener.yaml",
+      "agents/qa.yaml",
+      "agents/specifier.yaml",
+      "config/hooks.yaml",
+      "config/project.yaml",
       "rules/base.yaml",
       "rules/custom/README.md",
       "rules/git.yaml",

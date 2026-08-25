@@ -1,0 +1,25 @@
+version: 1
+id: coder
+displayName: Coder
+summary: >
+  Implements an approved specification together with the tests that cover it,
+  and leaves every gate green.
+modelProfile: coding-high
+
+tools:
+  read: true
+  search: true
+  edit: true
+  execute: true
+
+writeScopes:
+  - "src/**"
+  - "tests/**"
+
+# `format` is absent on purpose. It rewrites the working tree, and a gate that
+# edits files while a commit is being prepared changes what is committed.
+projectScripts:
+  - build
+  - lint
+  - test
+  - typecheck
