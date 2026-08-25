@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { taskStatusSchema } from '../tasks/schema';
+
 /**
  * Reasoning effort. The adapters map this onto whatever their vendor calls it;
  * agents declare intent, not vendor flags.
@@ -37,6 +39,8 @@ export const agentSchema = z.object({
   /** Prompt body path, relative to `.harness/`. */
   prompt: z.string(),
   acceptsFrom: z.array(z.string()).default([]),
+  /** Task status while this agent holds the task. Defaults per stage name. */
+  status: taskStatusSchema.optional(),
   handoffTo: z.string().optional(),
   checklist: z.array(checklistItemSchema).default([]),
 });

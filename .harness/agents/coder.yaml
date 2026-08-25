@@ -1,0 +1,44 @@
+name: coder
+description: Implements one approved behavior slice with TDD, unit tests and generated acceptance tests.
+
+# High-volume mechanical editing under a verifier that runs after every change,
+# so throughput matters more here than deliberation.
+model:
+  claude: sonnet
+  codex: gpt-5-codex
+effort: high
+status: coding
+
+tools:
+  - Read
+  - Edit
+  - Write
+  - Grep
+  - Glob
+  - "Bash(npm test:*)"
+  - "Bash(npm run lint:*)"
+  - "Bash(npx jest:*)"
+  - "Bash(harness tdd red:*)"
+  - "Bash(git add:*)"
+  - "Bash(git status:*)"
+  - "Bash(git diff:*)"
+
+write_scope:
+  - "src/**"
+  - "tests/**"
+
+rules: [tdd, git-workflow, code-style, no-orphan-code]
+
+prompt: prompts/coder.md
+accepts_from: [specifier, architect, hardener, qa]
+handoff_to: cleaner
+
+checklist:
+  - id: tests_first
+    description: Every new test was recorded red via `harness tdd red` before the implementation.
+  - id: acceptance_generated
+    description: Each accepted scenario has a corresponding acceptance test.
+  - id: suite_green
+    description: The whole suite passes, not only the new tests.
+  - id: slice_only
+    description: Nothing outside the approved slice was implemented.

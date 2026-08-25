@@ -32,6 +32,8 @@ export const configSchema = z.object({
   /** Adapter used when neither the CLI nor the agent specifies one. */
   adapter: z.string().default('claude'),
   pipeline: z.array(z.string()).min(1).default([...DEFAULT_PIPELINE]),
+  /** Where a rejected task goes back to. */
+  reworkAgent: z.string().default('coder'),
   adapters: z
     .record(adapterSchema)
     .default({

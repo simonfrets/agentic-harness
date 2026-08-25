@@ -21,12 +21,17 @@ export function modelFor(agent: AgentDefinition, adapter: string, fallback = '')
  * once, in one vendor-neutral format; this is the projection onto `.claude/`.
  */
 export function compileToClaudeMarkdown(paths: HarnessPaths, agent: AgentDefinition): string {
-  const frontmatter = YAML.stringify({
-    name: agent.name,
-    description: agent.description,
-    model: modelFor(agent, 'claude', 'inherit'),
-    tools: agent.tools.join(', '),
-  }).trimEnd();
+  // lineWidth: 0 disables folding. A folded `tools:` list still parses, but a
+  // value split mid-entry is a trap for whoever edits the file next.
+  const frontmatter = YAML.stringify(
+    {
+      name: agent.name,
+      description: agent.description,
+      model: modelFor(agent, 'claude', 'inherit'),
+      tools: agent.tools.join(', '),
+    },
+    { lineWidth: 0 },
+  ).trimEnd();
 
   const body = readAgentPrompt(paths, agent).trimEnd();
   const scope =

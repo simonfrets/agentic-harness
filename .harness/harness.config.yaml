@@ -1,0 +1,39 @@
+# Harness configuration. Everything here is project-local.
+version: 1
+
+# Adapter used when neither the CLI nor an agent asks for a specific one.
+adapter: claude
+
+# The stages a task walks through, in order.
+pipeline: [specifier, coder, cleaner, architect, hardener, qa]
+
+# Where a rejected task goes back to.
+reworkAgent: coder
+
+adapters:
+  claude:
+    bin: claude
+    defaultModel: sonnet
+    args: []
+  codex:
+    bin: codex
+    defaultModel: gpt-5-codex
+    args: []
+
+# Gates run at every handoff. Turning one off is a deliberate, visible choice.
+gates:
+  writeScope: true   # an agent may only touch the globs it declared
+  rules: true        # blocking rules with a check script must pass
+  tdd: true          # paired tests, and red-before-green receipts
+
+tdd:
+  # This repo's production code is both halves of the harness.
+  srcPrefixes: [src, runtime]
+  testPrefixes: [tests]
+  coverageFloor: 80
+  crapCeiling: 30
+
+notify:
+  # Shell command run when a task reaches `done`. $HARNESS_TASK is available.
+  # e.g. command: 'osascript -e "display notification \"$HARNESS_TASK done\""'
+  command: ''

@@ -1,0 +1,20 @@
+#!/bin/sh
+# Fake `codex` CLI. Codex is not installed on every machine, so the adapter is
+# verified purely against this contract double -- same protocol as the claude
+# fake, different argv.
+set -eu
+
+if [ -n "${HARNESS_FAKE_LOG:-}" ]; then
+  printf '%s|%s|%s\n' "${HARNESS_AGENT:-?}" "$(basename "$0")" "$*" >>"$HARNESS_FAKE_LOG"
+fi
+
+cat >/dev/null 2>&1 || true
+
+state=${HARNESS_STATE_DIR:-}
+if [ -n "$state" ]; then
+  mkdir -p "$state"
+  printf 'fake codex %s finished %s\n' "${HARNESS_AGENT:-?}" "${HARNESS_TASK:-?}" >"$state/output.md"
+  : >"$state/checklist.env"
+fi
+
+exit "${HARNESS_FAKE_EXIT:-0}"
