@@ -60,6 +60,15 @@ export {
   projectProfileSchema,
   toPortableProjectProfile,
 } from "./project/project-profile-schema.js";
+export { discoverProjectProfile } from "./project/discover-project-profile.js";
+export type { DiscoverProjectProfileOptions } from "./project/discover-project-profile.js";
+export {
+  LOCKFILE_PACKAGE_MANAGERS,
+  PackageManagerAmbiguityError,
+  detectLockfilePackageManagers,
+  parseDeclaredPackageManager,
+  resolvePackageManager,
+} from "./project/package-manager.js";
 export type {
   HookEntrypoint,
   PackageManager,
@@ -79,6 +88,14 @@ export {
   describeCommandResult,
   toSpawnFailure,
 } from "./processes/command-runner.js";
+export {
+  ENVIRONMENT_ALLOWLIST,
+  NODE_COMMAND_RUNNER_DEFAULTS,
+  buildChildEnvironment,
+  createNodeCommandRunner,
+  nodeCommandRunner,
+} from "./processes/node-command-runner.js";
+export type { NodeCommandRunnerOptions } from "./processes/node-command-runner.js";
 export type {
   CommandOutput,
   CommandRequest,
