@@ -168,6 +168,13 @@ export type {
   RunPhaseGatesOptions,
 } from "./gates/run-phase-gates.js";
 
+export {
+  harnessTemplateRoot,
+  listHarnessTemplateFiles,
+  readHarnessTemplateFile,
+} from "./install/harness-templates.js";
+export type { HarnessTemplateFile } from "./install/harness-templates.js";
+
 export { CLI_COMMANDS, parseCliArguments } from "./cli/parse-cli-arguments.js";
 export type {
   CliCommand,
