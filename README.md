@@ -9,15 +9,15 @@ and runtime under that project's `.harness/` directory.
 
 ## Current status
 
-This branch implements the rule and gate kernel and the command line entry
-point: rule bundles are validated, layered, hashed, compiled into agent
-policies, executed as phase gates, and reachable from a `harness` executable.
+This branch implements the rule and gate kernel, the command line entry point,
+and the `.harness/` installer: rule bundles are validated, layered, hashed,
+compiled into agent policies, executed as phase gates, and installed into a
+host project by `harness init`, which `harness doctor` then checks.
 
-The `.harness/` installer, Git hook dispatch, task state, and the Codex and
-Claude adapters are **not** implemented yet. `harness init` and
-`harness doctor` report themselves as unavailable, and nothing here installs
-into another project: the CLI reads a `.harness/` directory that has to be
-created by hand for now.
+Git hook dispatch, task state, and the Codex and Claude adapters are **not**
+implemented yet. `harness init` installs files and a private dependency tree;
+it does not yet touch a project's Git hooks, so a gate runs when it is invoked
+rather than on every commit.
 
 ## Requirements
 
@@ -65,7 +65,8 @@ harness <command> [options]
 | `harness rules explain`               | List the resolved rules with their origins    |
 | `harness rules explain --agent coder` | Print that agent's compiled policy            |
 | `harness gate <phase>`                | Run the checks that apply to a workflow phase |
-| `harness init` / `doctor`             | Not available in this build                   |
+| `harness init [--update]`             | Install or update `.harness/` in this project |
+| `harness doctor`                      | Check that the installed harness can run      |
 
 Rules are read from the project the command is run in. The working tree root
 is resolved with `git rev-parse --show-toplevel`, so a command works from any
@@ -84,6 +85,52 @@ them:
 | 3    | Invalid or missing harness configuration      |
 | 4    | A required check failed and blocked the phase |
 | 5    | The action was unsafe and was not taken       |
+
+## Installation
+
+`harness init` resolves the working tree with `git rev-parse --show-toplevel`
+and refuses to install outside a Git repository. Everything it writes lands
+under `.harness/`; the host project's `package.json`, ESLint configuration and
+lockfile are never read for writing and never modified.
+
+Each managed file is written through a temporary sibling and an atomic rename,
+so an interrupted install leaves the previous version intact rather than a
+truncated one. What happens to a file that is already there is decided before
+anything is written, from `.harness/version.json` — the manifest recording what
+the harness installed and the SHA-256 it wrote:
+
+| On disk | In the manifest | Content               | `--update` | Outcome                   |
+| ------- | --------------- | --------------------- | ---------- | ------------------------- |
+| absent  | –               | –                     | –          | created                   |
+| present | –               | equals shipped        | –          | kept                      |
+| present | no entry        | differs               | –          | refused: unmanaged file   |
+| present | entry           | local ≠ manifest hash | –          | refused: locally modified |
+| present | entry           | differs               | no         | refused: needs `--update` |
+| present | entry           | differs               | yes        | replaced                  |
+
+Every conflict in a project is collected and reported once, so a half-adopted
+installation is untangled in one pass instead of one file per re-run. Nothing
+is written until the plan is conflict-free.
+
+A managed file that a newer harness no longer ships is **reported and left in
+place**. Deleting a file from someone's project is the irreversible act the
+installer will not perform on its own.
+
+Runtime dependencies are resolved into `.harness/node_modules/` by npm running
+with `.harness/` as its working directory — npm regardless of what the host
+project uses, because resolving this tree with the project's package manager
+would apply that manager's workspace rules and, in a monorepo, hoist the
+harness's dependencies into the workspace root. Files and the manifest are
+written before dependencies, so an install interrupted by a failing
+`npm install` leaves a project the harness still recognises as its own and a
+re-run repairs it.
+
+`harness doctor` checks Node, npm, Git, Bash, the installation manifest, the
+configuration files, the rule set, the private dependency tree, and Git hook
+reachability. It writes nothing, runs every check even after one fails, and
+exits `3` if any check is a problem. Warnings — an installation made by a
+different harness version, or hooks that are not dispatched through the harness
+— are reported without failing.
 
 ## Testing shell scripts
 
@@ -182,9 +229,9 @@ lockfiles. `config/hooks.yaml` says which Git hooks are managed and what to do
 when the project already has one — `chain` runs the existing hook and then the
 harness gate, `abort` stops. There is no `replace`.
 
-These files are shipped and validated; no runtime yet reads an installed copy.
-Installation is Milestone B3, hook dispatch is B4, and tool enforcement belongs
-to the provider adapters.
+`harness init` installs these files and `harness doctor` validates the
+installed copies. Hook dispatch is the next milestone, and enforcing the tool
+policy at run time belongs to the provider adapters.
 
 ## Phase gates
 
@@ -211,7 +258,7 @@ installed.
 
 ## Planned modules
 
-- Self-contained `.harness/` installer and diagnostics
+- Git hook dispatch that preserves a project's existing hooks
 - Typed Codex and Claude CLI adapter contract
 - Runtime enforcement of the shipped agent tool policies
 - Atomic `tasks.yaml` state and resumable handoffs

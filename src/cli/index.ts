@@ -27,6 +27,7 @@ runCli({
   commands: createDefaultCliCommands(),
   cwd: process.cwd(),
   now: () => new Date(),
+  nodeVersion: process.versions.node,
   packageRootDirectory,
   runner: nodeCommandRunner,
   streams: { stdout: process.stdout, stderr: process.stderr },

@@ -22,6 +22,7 @@ describe("runGate", () => {
         packageRootDirectory: "/tmp/package",
         runner: createFakeCommandRunner(exited(0)).run,
         now: () => new Date("2026-08-26T00:00:00.000Z"),
+        nodeVersion: "22.22.1",
       })
     ).rejects.toThrow(/no phase/);
   });
