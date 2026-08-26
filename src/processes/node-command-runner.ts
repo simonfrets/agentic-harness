@@ -19,6 +19,24 @@ import type {
 } from "./command-runner.js";
 
 /**
+ * The one git variable a gate has to inherit.
+ *
+ * `git commit -- <path>`, `commit -p` and `commit --only` build a *temporary*
+ * index and name it here. A check like the shipped `git diff --check --cached`
+ * that cannot see it reads the stale on-disk index instead, and reports a clean
+ * pass while conflict markers go into the commit. Stripping it does not make a
+ * gate safer, it makes it answer a different question than the one being asked.
+ *
+ * Deliberately alone. `GIT_DIR`, `GIT_WORK_TREE` and `GIT_PREFIX` are not
+ * forwarded: every command runs with an explicit absolute `cwd`, so git
+ * discovers the repository, the worktree and the prefix for itself, and
+ * inheriting them would let a hook running in one repository point a gate at
+ * another. `GIT_AUTHOR_*` and `GIT_COMMITTER_*` are not forwarded either — a
+ * gate has no business creating a commit, so it needs no identity for one.
+ */
+const GIT_INDEX_VARIABLE = "GIT_INDEX_FILE";
+
+/**
  * Only these variables are forwarded to a child process. An allowlist means a
  * credential that happens to live in the parent environment is never handed to
  * a gate command, which is a structural guarantee rather than a redaction pass
@@ -26,6 +44,7 @@ import type {
  */
 export const ENVIRONMENT_ALLOWLIST = [
   "CI",
+  GIT_INDEX_VARIABLE,
   "HOME",
   "LANG",
   "LC_ALL",
