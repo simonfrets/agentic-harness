@@ -48,7 +48,22 @@ const buildProject = (): string => {
 
   writeFileSync(
     join(root, "package.json"),
-    `${JSON.stringify({ name: "host", version: "1.0.0" }, null, 2)}\n`
+    `${JSON.stringify(
+      {
+        name: "host",
+        version: "1.0.0",
+        // The shipped bundles name these, and a check that cannot resolve its
+        // script is a check that blocks every commit.
+        scripts: {
+          build: "tsc",
+          lint: "eslint .",
+          test: "jest",
+          typecheck: "tsc --noEmit",
+        },
+      },
+      null,
+      2
+    )}\n`
   );
 
   return root;
@@ -233,6 +248,26 @@ describe("harness doctor", () => {
     expect(result.stdout).toContain("WARN Continuous integration —");
     expect(result.stdout).toContain("Result: 0 problems, 1 warning");
     expect(result.exitCode).toBe(CLI_EXIT_CODES.ok);
+  });
+
+  it("reports a shipped check that this project cannot run", async () => {
+    // Installing the TypeScript bundle into a project with no `lint` script
+    // blocked every commit from then on, while doctor reported no problems.
+    const root = buildProject();
+
+    writeFileSync(
+      join(root, "package.json"),
+      `${JSON.stringify({ name: "host", version: "1.0.0" }, null, 2)}\n`
+    );
+    await run(root, ["init"]);
+    resolveRuntime(root);
+
+    const result = await run(root, ["doctor"]);
+
+    expect(result.exitCode).toBe(CLI_EXIT_CODES.invalidConfig);
+    expect(result.stdout).toContain("FAIL Project scripts —");
+    expect(result.stdout).toContain("which package.json does not define");
+    expect(result.stdout).toContain("will block every commit");
   });
 
   it("reports an install whose dependencies never resolved", async () => {
