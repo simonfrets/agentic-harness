@@ -199,11 +199,21 @@ describe("createNodeCommandRunner", () => {
   });
 
   it("withholds variables outside the allowlist from the child", async () => {
-    const result = await run({
+    // The variable has to be set on the runner's base environment, or the
+    // child reports `undefined` however the allowlist behaves and the test
+    // proves nothing. It used to be set nowhere at all.
+    const leaky = createNodeCommandRunner({
+      ...NODE_COMMAND_RUNNER_DEFAULTS,
+      baseEnv: { ...process.env, AGENTIC_HARNESS_SECRET: "leak" },
+    });
+
+    const result = await leaky({
       command: nodeScript(
         "process.stdout.write(String(process.env.AGENTIC_HARNESS_SECRET))"
       ),
+      cwd: process.cwd(),
       env: null,
+      timeoutMs: 10_000,
     });
 
     expect(result.output.stdout).toBe("undefined");
@@ -229,6 +239,34 @@ describe("buildChildEnvironment", () => {
     );
 
     expect(environment).toEqual({ PATH: "/usr/bin", HOME: "/home/x" });
+  });
+
+  it("forwards the index a partial commit is being built from", () => {
+    // Without it a gate answers a different question than the commit being
+    // made: `git commit -- <path>` builds a temporary index and names it here,
+    // and a check that cannot see it reads the stale one.
+    expect(
+      buildChildEnvironment({ GIT_INDEX_FILE: "/repo/.git/next-index" }, null)
+    ).toEqual({ GIT_INDEX_FILE: "/repo/.git/next-index" });
+  });
+
+  it("forwards no other git variable, so a hook cannot redirect a gate", () => {
+    // Every command runs with an explicit absolute cwd, so git finds the
+    // repository itself. Inheriting these would let a hook running in one
+    // repository point a gate at another - which is exactly what happened to
+    // this repository's own test suite when they were forwarded.
+    expect(
+      buildChildEnvironment(
+        {
+          GIT_DIR: "/elsewhere/.git",
+          GIT_WORK_TREE: "/elsewhere",
+          GIT_PREFIX: "sub/",
+          GIT_AUTHOR_NAME: "x",
+          GIT_COMMITTER_EMAIL: "y",
+        },
+        null
+      )
+    ).toEqual({});
   });
 
   it("omits allowlisted variables that are absent from the base", () => {
