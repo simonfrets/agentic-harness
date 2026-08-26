@@ -140,6 +140,7 @@ describe("harness init", () => {
       ".gitignore",
       "agents",
       "bin",
+      "ci",
       "config",
       "hooks",
       "package.json",
@@ -224,7 +225,9 @@ describe("harness doctor", () => {
     expect(result.stdout).toContain(
       "OK   Git hooks — git dispatches pre-commit (pre-commit), pre-push (pre-push)"
     );
-    expect(result.stdout).toContain("Result: healthy");
+    // No workflow was placed, so CI is a warning: hooks alone are skippable.
+    expect(result.stdout).toContain("WARN Continuous integration —");
+    expect(result.stdout).toContain("Result: 0 problems, 1 warning");
     expect(result.exitCode).toBe(CLI_EXIT_CODES.ok);
   });
 

@@ -94,6 +94,23 @@ describe("formatInstallResult", () => {
     ).toContain("`core.hooksPath` was `.husky`");
   });
 
+  it("points at CI the first time it takes the hooks over", () => {
+    const text = format({
+      hooks: [{ hook: "pre-commit", chained: null }],
+      gitHooksPathChanged: true,
+    });
+
+    expect(text).toContain("--no-verify");
+    expect(text).toContain(".harness/ci/github-actions.yml");
+    expect(text).toContain(".github/workflows/");
+  });
+
+  it("does not repeat the CI reminder on every later install", () => {
+    expect(
+      format({ hooks: [{ hook: "pre-commit", chained: null }] })
+    ).not.toContain("--no-verify");
+  });
+
   it("says nothing about hooks when it manages none", () => {
     expect(format()).not.toContain("dispatches");
   });

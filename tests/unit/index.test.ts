@@ -8,6 +8,7 @@ import { HARNESS_DIRECTORY, harnessPackageMetadata } from "../../src/index.js";
  */
 const PUBLIC_API = [
   "BUILT_IN_AGENT_IDS",
+  "CI_TEMPLATE_PATH",
   "CLI_COMMANDS",
   "CLI_EXIT_CODES",
   "DEFAULT_CHECK_TIMEOUT_MS",
@@ -54,6 +55,7 @@ const PUBLIC_API = [
   "SEEDED_TEMPLATE_PATHS",
   "SEVERITIES",
   "VALIDATION_MODES",
+  "WORKFLOW_DIRECTORY",
   "agentDefinitionSchema",
   "agentIdSchema",
   "agentToolsSchema",

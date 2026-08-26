@@ -148,8 +148,8 @@ written before dependencies, so an install interrupted by a failing
 re-run repairs it.
 
 `harness doctor` checks Node, npm, Git, Bash, the installation manifest, the
-configuration files, the rule set, the private dependency tree, and Git hook
-reachability. It writes nothing, runs every check even after one fails, and
+configuration files, the rule set, the private dependency tree, Git hook
+reachability, and whether anything runs the gates in CI. It writes nothing, runs every check even after one fails, and
 exits `3` if any check is a problem. Warnings — an installation made by a
 different harness version, or hooks that are not dispatched through the harness
 — are reported without failing.
@@ -202,6 +202,54 @@ each worktree resolves its own `.harness/hooks`. The consequence is worth
 stating plainly: installing from one worktree redirects hooks for the whole
 repository, and a worktree with no `.harness/hooks` of its own then runs no
 hooks at all. Install from the main checkout, or install in every worktree.
+
+## Continuous integration
+
+There are two separate questions here, and they have different answers.
+
+### This repository
+
+`.github/workflows/ci.yml` runs `npm run check`, `npm run build`,
+`npm run test:coverage` and `npm pack --dry-run` on Linux and macOS — WSL runs
+the Linux build, so those two cover every shell target v1 claims. The Node
+version comes from `engines.node` rather than being written out again, so the
+version CI proves the project on cannot drift from the version the project says
+it needs.
+
+`.husky/pre-commit` runs the same gate locally, but a local hook is skippable
+with `git commit --no-verify`. The hook is the convenience; the workflow is the
+enforcement. `tests/integration/ci/workflow.test.ts` asserts the exact command
+list, so a step cannot be quietly dropped from the one place that cannot be
+skipped.
+
+### A project the harness is installed into
+
+The same reasoning applies, and the harness cannot act on it alone. A GitHub
+Actions workflow has to live in `.github/workflows/` to run at all, which is
+outside the `.harness/` boundary — the one thing installation is not allowed to
+cross. So `harness init` ships a ready workflow at `.harness/ci/github-actions.yml`
+and leaves placing it to the project:
+
+```sh
+mkdir -p .github/workflows
+cp .harness/ci/github-actions.yml .github/workflows/harness.yml
+```
+
+It resolves the private tree from `.harness/package-lock.json` and then runs
+`harness gate pre-commit` and `harness gate pre-push`; both, because the two
+phases check different things — lint and type checking on one, the build on the
+other.
+
+Leaving it there as documentation would make it advice, which this project does
+not treat as enforcement, so `harness doctor` reports it: a project whose
+`.github/workflows/` contains nothing invoking `harness gate` gets a **warning**
+naming the file to copy. A warning rather than a failure, because a project may
+enforce the same gates on GitLab, Jenkins or a server-side hook, and "no GitHub
+workflow runs them" is the only claim this check is in a position to make.
+
+One caveat the template states in place: a check that inspects staged content,
+such as the shipped `git diff --check --cached`, has nothing to look at in CI,
+because CI has no index. Those rules are enforced by the hook alone.
 
 ## Testing shell scripts
 

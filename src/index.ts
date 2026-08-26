@@ -279,9 +279,11 @@ export type { HookDispatcher } from "./install/hook-scripts.js";
 export { planHooks } from "./install/plan-hooks.js";
 export type { PlanHooksInput } from "./install/plan-hooks.js";
 export {
+  CI_TEMPLATE_PATH,
   DIAGNOSTIC_STATUSES,
   REQUIRED_NODE_VERSION,
   REQUIRED_TOOLS,
+  WORKFLOW_DIRECTORY,
   diagnoseHarness,
   versionOrder,
 } from "./install/diagnose-harness.js";

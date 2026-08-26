@@ -30,6 +30,7 @@ describe("listHarnessTemplateFiles", () => {
       "agents/hardener.yaml",
       "agents/qa.yaml",
       "agents/specifier.yaml",
+      "ci/github-actions.yml",
       "config/hooks.yaml",
       "config/project.yaml",
       "rules/base.yaml",

@@ -6,12 +6,13 @@ import type { SpawnSyncReturns } from "node:child_process";
  *
  * Git exports `GIT_DIR`, `GIT_WORK_TREE` and `GIT_INDEX_FILE` to the hooks it
  * runs, and this repository's own pre-commit hook runs the whole suite. A test
- * that spawned `git init` or `git commit` with the ambient environment would
- * therefore act on *this* repository rather than on its temporary fixture.
+ * that spawned git with the ambient environment would therefore act on *this*
+ * repository rather than on its temporary fixture.
  *
  * That is not a hypothetical: before this helper existed it rewrote this
- * branch's HEAD, created a stray branch and registered a worktree pointing
- * into a temporary directory.
+ * branch's HEAD, created a stray branch, registered a worktree pointing into a
+ * temporary directory, and wrote the fixture's identity into this repository's
+ * `.git/config`, where it went on to author four commits.
  *
  * `nodeCommandRunner` is unaffected — its environment allowlist already drops
  * every `GIT_*` variable — so only tests that spawn a process themselves need
@@ -31,28 +32,42 @@ export const cleanEnvironment = (
   return { ...environment, ...overrides };
 };
 
+/**
+ * The identity fixture commits are made with.
+ *
+ * Passed per invocation rather than written with `git config`, so that even a
+ * fixture that somehow resolves to the wrong repository cannot leave anything
+ * behind in it. Writing this identity into a config file is what silently
+ * re-authored four real commits.
+ */
+const IDENTITY = [
+  "-c",
+  "user.name=Harness Test",
+  "-c",
+  "user.email=harness@example.invalid",
+] as const;
+
 /** Runs git against a fixture, never against the repository under test. */
 export const runGit = (
   cwd: string,
-  args: readonly string[]
+  args: readonly string[],
+  overrides: Readonly<Record<string, string>> = {}
 ): SpawnSyncReturns<string> =>
-  spawnSync("git", [...args], {
+  spawnSync("git", [...IDENTITY, ...args], {
     cwd,
     encoding: "utf8",
-    env: cleanEnvironment(),
+    env: cleanEnvironment(overrides),
   });
 
 /**
  * Creates a repository and proves it is the one git will act on.
  *
- * The assertion is the guard: a leaked `GIT_DIR` makes this fail loudly in the
- * first line of a test instead of quietly committing a fixture into whichever
+ * The assertion runs before anything is written, so a leaked `GIT_DIR` fails
+ * loudly in a test's first line instead of quietly modifying whichever
  * repository the environment happened to point at.
  */
 export const initRepository = (root: string): void => {
   runGit(root, ["init", "--quiet"]);
-  runGit(root, ["config", "user.email", "harness@example.invalid"]);
-  runGit(root, ["config", "user.name", "Harness Test"]);
 
   const resolved = runGit(root, ["rev-parse", "--show-toplevel"]).stdout.trim();
 

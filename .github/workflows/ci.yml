@@ -1,0 +1,51 @@
+# The gate this repository cannot bypass.
+#
+# .husky/pre-commit runs the same commands locally, but a local hook is
+# skippable with --no-verify, so it is a convenience rather than an
+# enforcement. This workflow is the enforcement.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: Gate on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Both targets always report. A macOS-only failure is usually a path or
+      # shell difference, and knowing whether Linux also failed is the first
+      # thing that narrows it down.
+      fail-fast: false
+      matrix:
+        # v1 supports macOS, Linux and WSL. WSL runs the Linux build, so these
+        # two cover every shell target the project claims.
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Read from engines.node, so the version CI proves the project on
+          # cannot drift away from the version the project says it needs.
+          node-version-file: package.json
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run check
+
+      - run: npm run build
+
+      - run: npm run test:coverage
+
+      - run: npm pack --dry-run

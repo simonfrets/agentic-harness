@@ -1,6 +1,8 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
+import { parse } from "yaml";
+
 import { loadAgentDefinition } from "../../../src/agents/agent-definition.js";
 import type { AgentDefinition } from "../../../src/agents/agent-definition.js";
 import { BUILT_IN_AGENT_IDS } from "../../../src/agents/agent-id.js";
@@ -272,6 +274,38 @@ describe("the shipped agent definitions", () => {
         definition.projectScripts.length === 0 || definition.tools.execute
       ).toBe(true);
     }
+  });
+});
+
+describe("the shipped CI workflow", () => {
+  const workflow = readHarnessTemplateFile(
+    packageRoot,
+    "ci/github-actions.yml"
+  );
+
+  it("runs both gate phases, which check different things", () => {
+    expect(workflow).toContain("harness gate pre-commit");
+    expect(workflow).toContain("harness gate pre-push");
+  });
+
+  it("resolves the private tree, which is git-ignored and absent in CI", () => {
+    expect(workflow).toContain("working-directory: .harness");
+  });
+
+  it("says why it exists and what to do with it", () => {
+    // It does nothing where it is installed, so a reader who does not act on
+    // it has gained nothing.
+    expect(workflow).toContain(".github/workflows");
+    expect(workflow).toContain("--no-verify");
+  });
+
+  it("is valid YAML with the triggers a gate needs", () => {
+    const parsed: unknown = parse(workflow);
+
+    expect(parsed).toMatchObject({
+      name: "Harness gates",
+      on: { pull_request: null },
+    });
   });
 });
 
