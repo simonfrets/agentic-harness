@@ -1,3 +1,8 @@
+> **Archived handoff.** Milestone B is complete as of `1dfff4f`. See
+> `docs/handoff/milestone-c.md` for the current state.
+
+---
+
 # Milestone B handoff: `.harness` installer and external hooks
 
 ## How to start
