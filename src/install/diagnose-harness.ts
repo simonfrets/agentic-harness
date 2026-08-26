@@ -1,5 +1,5 @@
 import { readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 
 import { loadHooksConfig } from "../config/hooks-config.js";
 import type { HooksConfig } from "../config/hooks-config.js";
@@ -17,6 +17,7 @@ import { readTextFileIfPresent } from "../harness/read-text-file.js";
 import { describeCommandResult } from "../processes/command-runner.js";
 import type { CommandRunner } from "../processes/command-runner.js";
 import { readInstallManifest } from "./install-manifest.js";
+import type { HookRecord } from "./install-manifest.js";
 import { HARNESS_PACKAGE_NAME } from "./runtime-dependencies.js";
 
 /** Where a GitHub Actions workflow has to live to run at all. */
@@ -425,14 +426,58 @@ const diagnoseContinuousIntegration = (projectRoot: string): Diagnostic => {
       );
 };
 
+/**
+ * Reports chained hooks recorded by absolute path.
+ *
+ * A dispatcher is committed with the project, so a preserved hook is re-joined
+ * to the repository at run time whenever it lives inside it. One that does not
+ * — a hook behind a `core.hooksPath` set in the user's global config, say — can
+ * only be named absolutely, and that name means nothing on anyone else's
+ * machine. The dispatcher skips it silently there, which is the failure worth
+ * naming out loud.
+ */
+const diagnoseChainedHooks = (
+  hooks: readonly HookRecord[]
+): Diagnostic | null => {
+  const external = hooks.filter(
+    (hook) => hook.chained !== null && isAbsolute(hook.chained)
+  );
+
+  return external.length === 0
+    ? null
+    : diagnostic(
+        "chained-hooks",
+        "Chained hooks",
+        "warning",
+        `${external
+          .map((hook) => `${hook.hook} runs ${String(hook.chained)}`)
+          .join(
+            ", "
+          )} — outside the repository, so it will not exist for anyone else who checks the project out`
+      );
+};
+
+/** Hooks the manifest recorded, or none when it cannot be read. */
+const readRecordedHooks = (projectRoot: string): readonly HookRecord[] => {
+  try {
+    return readInstallManifest(projectRoot)?.hooks ?? [];
+  } catch {
+    // An unreadable manifest is already reported by the installation check.
+    return [];
+  }
+};
+
 const readGitHooksPath = async (
   projectRoot: string,
   runner: CommandRunner
 ): Promise<string | null> => {
   const result = await runner({
     command: {
+      // The effective value, from any config scope. Asking only `--local`
+      // reports "unset" for a repository whose hooks run from the user's
+      // global config, which is the case worth noticing.
       executable: "git",
-      args: ["config", "--local", "--get", "core.hooksPath"],
+      args: ["config", "--get", "core.hooksPath"],
     },
     cwd: projectRoot,
     env: null,
@@ -468,6 +513,7 @@ export const diagnoseHarness = async (
 
   const config = diagnoseConfig(projectRoot);
   const gitHooksPath = await readGitHooksPath(projectRoot, runner);
+  const chained = diagnoseChainedHooks(readRecordedHooks(projectRoot));
 
   const diagnostics: readonly Diagnostic[] = [
     diagnoseNode(options.nodeVersion),
@@ -477,6 +523,10 @@ export const diagnoseHarness = async (
     diagnoseRules(projectRoot),
     diagnoseRuntime(projectRoot),
     diagnoseHooks(projectRoot, config.hooks, gitHooksPath),
+    // Only reported when there is something to report: a project with no
+    // chained hook outside itself should not be told about a hazard it has
+    // no instance of.
+    ...(chained === null ? [] : [chained]),
     diagnoseContinuousIntegration(projectRoot),
   ];
 

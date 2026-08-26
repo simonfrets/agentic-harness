@@ -32,7 +32,10 @@ const project = (files: Readonly<Record<string, string>> = {}): string => {
 const discover = async (
   projectRoot: string,
   options: {
+    /** The effective value, from any config scope. */
     readonly hooksPath?: string;
+    /** Which config set it. `inherited` leaves the repository's own unset. */
+    readonly scope?: "local" | "inherited";
     readonly commonDirectory?: string;
   } = {}
 ): Promise<HookEnvironment> =>
@@ -45,9 +48,16 @@ const discover = async (
         return exited(0, { stdout: `${options.commonDirectory ?? ".git"}\n` });
       }
 
-      return options.hooksPath === undefined
+      // `config --local --get` asks the repository; `config --get` asks for
+      // the effective value, whichever scope set it.
+      const value =
+        args[1] === "--local" && options.scope === "inherited"
+          ? undefined
+          : options.hooksPath;
+
+      return value === undefined
         ? exited(1)
-        : exited(0, { stdout: `${options.hooksPath}\n` });
+        : exited(0, { stdout: `${value}\n` });
     }).run,
   });
 
@@ -78,7 +88,10 @@ describe("discoverHookEnvironment", () => {
   it("keeps an absolute core.hooksPath and reports its hooks absolutely", async () => {
     const elsewhere = project({ "pre-commit": HOOK });
     const root = project();
-    const environment = await discover(root, { hooksPath: elsewhere });
+    const environment = await discover(root, {
+      hooksPath: elsewhere,
+      scope: "inherited",
+    });
 
     expect(environment.hooksDirectory).toBe(elsewhere);
     expect(environment.priorHooks).toEqual([
@@ -185,5 +198,47 @@ describe("toProjectPath", () => {
 
   it("keeps the project root itself absolute rather than empty", () => {
     expect(toProjectPath("/tmp/host", "/tmp/host")).toBe("/tmp/host");
+  });
+});
+
+describe("discoverHookEnvironment and config scope", () => {
+  it("chains hooks configured outside the repository", async () => {
+    // A `core.hooksPath` in the user's global config governs this repository
+    // without being part of it. Asking only `--local` reported no hooks at
+    // all, and the installer then switched them off without a word.
+    const elsewhere = project({ "pre-commit": HOOK });
+    const root = project();
+
+    const environment = await discover(root, {
+      hooksPath: elsewhere,
+      scope: "inherited",
+    });
+
+    expect(environment.hooksPathScope).toBe("inherited");
+    expect(environment.priorHooks).toEqual([
+      { hook: "pre-commit", path: join(elsewhere, "pre-commit") },
+    ]);
+  });
+
+  it("marks the repository's own value as local", async () => {
+    const root = project({ ".husky/pre-commit": HOOK });
+    const environment = await discover(root, { hooksPath: ".husky" });
+
+    expect(environment.hooksPathScope).toBe("local");
+  });
+
+  it("reports no scope when nothing configures a hooks path", async () => {
+    expect((await discover(project())).hooksPathScope).toBeNull();
+  });
+
+  it("prefers the effective value over the repository's own", async () => {
+    // git resolves precedence itself; discovery must not second-guess it.
+    const root = project({ ".husky/pre-commit": HOOK });
+    const environment = await discover(root, {
+      hooksPath: ".husky",
+      scope: "inherited",
+    });
+
+    expect(environment.hooksDirectory).toBe(join(root, ".husky"));
   });
 });

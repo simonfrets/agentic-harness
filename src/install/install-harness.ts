@@ -17,6 +17,7 @@ import type { CommandRunner } from "../processes/command-runner.js";
 import { compareCodeUnits } from "../rules/hash-rule-set.js";
 import { writeFileAtomic } from "./atomic-write.js";
 import { discoverHookEnvironment } from "./discover-hooks.js";
+import type { HooksPathScope } from "./discover-hooks.js";
 import {
   listHarnessTemplateFiles,
   readHarnessTemplateFile,
@@ -143,6 +144,8 @@ export interface InstallHarnessResult {
   readonly hooks: readonly HookRecord[];
   /** `core.hooksPath` as it was before this install, or null when unset. */
   readonly previousHooksPath: string | null;
+  /** Which config that value came from. `inherited` is not part of the repo. */
+  readonly previousHooksPathScope: HooksPathScope | null;
   /** True when this install changed git's `core.hooksPath`. */
   readonly gitHooksPathChanged: boolean;
 }
@@ -305,6 +308,9 @@ export const installHarness = async (
   const previousHooksPath = environment.dispatchedByHarness
     ? (previous?.previousHooksPath ?? null)
     : environment.hooksPath;
+  const previousHooksPathScope = environment.dispatchedByHarness
+    ? null
+    : environment.hooksPathScope;
 
   writeInstallManifest(projectRoot, {
     version: INSTALL_MANIFEST_VERSION,
@@ -343,6 +349,7 @@ export const installHarness = async (
     dependenciesInstalled: installDependencies,
     hooks,
     previousHooksPath,
+    previousHooksPathScope,
     gitHooksPathChanged,
   };
 };

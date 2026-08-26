@@ -259,12 +259,14 @@ export type {
   InstallHarnessResult,
 } from "./install/install-harness.js";
 export {
+  HOOKS_PATH_SCOPES,
   discoverHookEnvironment,
   toProjectPath,
 } from "./install/discover-hooks.js";
 export type {
   DiscoverHookEnvironmentOptions,
   HookEnvironment,
+  HooksPathScope,
   PriorHook,
 } from "./install/discover-hooks.js";
 export {

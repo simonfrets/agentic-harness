@@ -508,6 +508,80 @@ describe("REQUIRED_NODE_VERSION", () => {
   });
 });
 
+describe("diagnoseHarness on chained hooks", () => {
+  const manifestWithHooks = (chained: string | null): string =>
+    `${JSON.stringify(
+      {
+        version: 1,
+        harnessVersion: HARNESS_VERSION,
+        installedAt: "2026-08-26T00:00:00.000Z",
+        updatedAt: "2026-08-26T00:00:00.000Z",
+        managedFiles: [],
+        hooks: [{ hook: "pre-commit", chained }],
+      },
+      null,
+      2
+    )}\n`;
+
+  it("warns about a chained hook that lives outside the repository", async () => {
+    // A dispatcher is committed with the project, so an absolute path means
+    // nothing on anyone else's machine and is skipped there in silence.
+    const diagnosis = await diagnose(
+      buildInstalled({
+        files: {
+          ".harness/version.json": manifestWithHooks(
+            "/home/x/hooks/pre-commit"
+          ),
+        },
+      })
+    );
+
+    expect(find(diagnosis, "chained-hooks")).toMatchObject({
+      status: "warning",
+    });
+    expect(find(diagnosis, "chained-hooks").detail).toContain(
+      "will not exist for anyone else"
+    );
+  });
+
+  it("says nothing when every chained hook is inside the project", async () => {
+    const diagnosis = await diagnose(
+      buildInstalled({
+        files: {
+          ".harness/version.json": manifestWithHooks(".git/hooks/pre-commit"),
+        },
+      })
+    );
+
+    expect(diagnosis.diagnostics.map((entry) => entry.id)).not.toContain(
+      "chained-hooks"
+    );
+  });
+
+  it("says nothing when no hook chains anything", async () => {
+    const diagnosis = await diagnose(
+      buildInstalled({
+        files: { ".harness/version.json": manifestWithHooks(null) },
+      })
+    );
+
+    expect(diagnosis.diagnostics.map((entry) => entry.id)).not.toContain(
+      "chained-hooks"
+    );
+  });
+
+  it("stays quiet when the manifest cannot be read at all", async () => {
+    const diagnosis = await diagnose(
+      buildInstalled({ files: { ".harness/version.json": "{" } })
+    );
+
+    expect(diagnosis.diagnostics.map((entry) => entry.id)).not.toContain(
+      "chained-hooks"
+    );
+    expect(find(diagnosis, "installation").status).toBe("problem");
+  });
+});
+
 describe("diagnoseHarness on continuous integration", () => {
   it("warns when nothing runs the gates where they cannot be skipped", async () => {
     // A git hook is bypassable with `--no-verify`, so hooks alone are a

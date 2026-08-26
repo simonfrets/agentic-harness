@@ -14,6 +14,7 @@ const RESULT: InstallHarnessResult = {
   dependenciesInstalled: true,
   hooks: [],
   previousHooksPath: null,
+  previousHooksPathScope: null,
   gitHooksPathChanged: false,
 };
 
@@ -103,6 +104,7 @@ describe("formatInstallResult", () => {
       format({
         hooks: [{ hook: "pre-commit", chained: ".husky/pre-commit" }],
         previousHooksPath: ".husky",
+        previousHooksPathScope: "local",
       })
     ).toContain("`core.hooksPath` was `.husky`");
   });
@@ -122,6 +124,19 @@ describe("formatInstallResult", () => {
     expect(
       format({ hooks: [{ hook: "pre-commit", chained: null }] })
     ).not.toContain("--no-verify");
+  });
+
+  it("warns that a hooks path from outside the repository is not shared", () => {
+    const text = format({
+      hooks: [
+        { hook: "pre-commit", chained: "/home/x/globalhooks/pre-commit" },
+      ],
+      previousHooksPath: "/home/x/globalhooks",
+      previousHooksPathScope: "inherited",
+    });
+
+    expect(text).toContain("set outside this repository");
+    expect(text).toContain("will not exist for anyone else");
   });
 
   it("says nothing about hooks when it manages none", () => {

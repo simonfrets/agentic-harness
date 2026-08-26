@@ -79,10 +79,14 @@ const run = async (
     }
 
     if (executable === "git" && args[0] === "config") {
-      const [, , key, value] = args;
+      // Three shapes reach this fake: `config --get <key>` (effective),
+      // `config --local --get <key>` (repository only), and
+      // `config --local <key> <value>` (write).
+      const rest = args[1] === "--local" ? args.slice(2) : args.slice(1);
+      const [head, tail] = rest;
 
-      if (key === "--get") {
-        const stored = gitConfig.get(`${root}:${String(value)}`);
+      if (head === "--get") {
+        const stored = gitConfig.get(`${root}:${String(tail)}`);
 
         // git exits non-zero for an unset key, which is not an error.
         return stored === undefined
@@ -90,7 +94,7 @@ const run = async (
           : exited(0, { stdout: `${stored}\n` });
       }
 
-      gitConfig.set(`${root}:${String(key)}`, String(value));
+      gitConfig.set(`${root}:${String(head)}`, String(tail));
 
       return exited(0);
     }

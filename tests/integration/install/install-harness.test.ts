@@ -480,9 +480,14 @@ describe("installHarness", () => {
     expect(result.created).toContain("bin/harness");
     expect(existsSync(join(root, ".harness", "bin", "harness"))).toBe(true);
     // git keeps running its own hooks, so its configuration is left alone.
+    // A *write* specifically: `config --local core.hooksPath <value>`. The
+    // reads name the same key, so matching the key alone would catch those too.
     expect(
       runner.requests.filter(
-        (request) => request.command.args[2] === "core.hooksPath"
+        (request) =>
+          request.command.args[0] === "config" &&
+          request.command.args[1] === "--local" &&
+          request.command.args[2] === "core.hooksPath"
       )
     ).toEqual([]);
   });
