@@ -55,6 +55,12 @@ const agentDefinitionShape = z.strictObject({
  * scopes, or the reverse, gives the runtime two answers, and whichever one it
  * happens to read becomes the real policy by accident. Rejecting the file is
  * the only reading that cannot silently grant an agent more than was intended.
+ *
+ * `execute` and `projectScripts` are held to the same rule in both directions.
+ * Only one of the two was checked before, so `execute: true` with no scripts
+ * validated happily - an agent permitted to run commands with nothing it is
+ * permitted to run, which is the same contradiction the edit invariant exists
+ * to reject.
  */
 export const agentDefinitionSchema = agentDefinitionShape.superRefine(
   (definition, ctx) => {
@@ -73,6 +79,15 @@ export const agentDefinitionSchema = agentDefinitionShape.superRefine(
         path: ["writeScopes"],
         message:
           "an agent with `tools.edit: false` must not declare a write scope",
+      });
+    }
+
+    if (definition.tools.execute && definition.projectScripts.length === 0) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["projectScripts"],
+        message:
+          "an agent with `tools.execute: true` must declare at least one project script",
       });
     }
 

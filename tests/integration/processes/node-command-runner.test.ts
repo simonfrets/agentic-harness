@@ -1,4 +1,5 @@
-import { existsSync, readdirSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 import {
@@ -6,6 +7,7 @@ import {
   NODE_COMMAND_RUNNER_DEFAULTS,
   buildChildEnvironment,
   createNodeCommandRunner,
+  killProcessTree,
   nodeCommandRunner,
 } from "../../../src/processes/node-command-runner.js";
 import type {
@@ -29,6 +31,29 @@ const nodeScript = (
   executable: process.execPath,
   args: ["-e", source, ...extraArgs],
 });
+
+const isAlive = (pid: number): boolean => {
+  try {
+    process.kill(pid, 0);
+
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/** Signals are asynchronous, so exit is polled rather than assumed immediate. */
+const waitForExit = async (pid: number): Promise<boolean> => {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    if (!isAlive(pid)) {
+      return true;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  return false;
+};
 
 const run = async (
   request: Partial<CommandRequest> & Pick<CommandRequest, "command">
@@ -222,6 +247,34 @@ describe("createNodeCommandRunner", () => {
     expect(result.output.stdout).toBe("undefined");
   });
 
+  it("kills the whole process tree a timed-out command left behind", async () => {
+    // `npm run test` is a shell wrapping the real runner. Signalling only the
+    // direct child reaped the wrapper and left the runner alive, still holding
+    // the repository the gate had already given up on.
+    const directory = createTempDirectory("agentic-harness-tree-");
+    const pidFile = join(directory, "grandchild.pid");
+    const result = await run({
+      command: nodeScript(
+        [
+          "const { spawn } = require('child_process');",
+          "const { writeFileSync } = require('fs');",
+          "const child = spawn(process.execPath,",
+          "  ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });",
+          `writeFileSync(${JSON.stringify(pidFile)}, String(child.pid));`,
+          "setInterval(() => {}, 1000);",
+        ].join("")
+      ),
+      timeoutMs: 500,
+    });
+
+    expect(result.outcome).toBe("timed-out");
+
+    const grandchild = Number(readFileSync(pidFile, "utf8"));
+
+    expect(Number.isInteger(grandchild)).toBe(true);
+    expect(await waitForExit(grandchild)).toBe(true);
+  });
+
   it("exposes a default runner that works without configuration", async () => {
     const result = await nodeCommandRunner({
       command: nodeScript("process.stdout.write('default')"),
@@ -292,5 +345,43 @@ describe("buildChildEnvironment", () => {
     expect([...ENVIRONMENT_ALLOWLIST]).toEqual(
       [...ENVIRONMENT_ALLOWLIST].sort()
     );
+  });
+});
+
+describe("killProcessTree", () => {
+  it("signals the whole group and does not fall back", () => {
+    const child = spawn(
+      process.execPath,
+      ["-e", "setInterval(() => {}, 1000)"],
+      { detached: true, stdio: "ignore" }
+    );
+    const fallback = jest.fn();
+
+    killProcessTree(child.pid, "SIGKILL", fallback);
+
+    expect(fallback).not.toHaveBeenCalled();
+
+    child.unref();
+  });
+
+  it("falls back when the command never started", () => {
+    // Without this guard the pid is absent, `-0` is not a group but *the
+    // caller's own*, and a spawn that never started would signal the harness
+    // and everything running alongside it.
+    const fallback = jest.fn();
+
+    killProcessTree(undefined, "SIGTERM", fallback);
+
+    expect(fallback).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back when the group has already gone", () => {
+    // A group that has exited raises ESRCH rather than returning quietly, and
+    // inside a timer callback that is an unhandled throw.
+    const fallback = jest.fn();
+
+    killProcessTree(0x3ffffffe, "SIGTERM", fallback);
+
+    expect(fallback).toHaveBeenCalledTimes(1);
   });
 });

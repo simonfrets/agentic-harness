@@ -170,6 +170,7 @@ export {
   NODE_COMMAND_RUNNER_DEFAULTS,
   buildChildEnvironment,
   createNodeCommandRunner,
+  killProcessTree,
   nodeCommandRunner,
 } from "./processes/node-command-runner.js";
 export type { NodeCommandRunnerOptions } from "./processes/node-command-runner.js";

@@ -107,6 +107,7 @@ const PUBLIC_API = [
   "installRuntimeDependencies",
   "isBuiltInAgentId",
   "isSeededTemplate",
+  "killProcessTree",
   "listHarnessTemplateFiles",
   "loadAgentDefinition",
   "loadHarnessRuleSet",

@@ -297,6 +297,23 @@ describe("the shipped CI workflow", () => {
     expect(workflow).toContain("working-directory: .harness");
   });
 
+  it("caches against the harness lockfile, which is the one always present", () => {
+    // `cache: npm` alone makes setup-node look for a lockfile at the project
+    // root and fail the step outright when the project is on pnpm, yarn or
+    // bun. The private tree is npm by design, so its lockfile always exists.
+    expect(workflow).toContain(
+      "cache-dependency-path: .harness/package-lock.json"
+    );
+  });
+
+  it("tells a project that is not on npm what to change", () => {
+    // The harness detects pnpm, yarn and bun, so a workflow that silently
+    // assumed npm would break for exactly the projects it detects.
+    for (const manager of ["pnpm", "yarn", "bun"]) {
+      expect(workflow).toContain(manager);
+    }
+  });
+
   it("says why it exists and what to do with it", () => {
     // It does nothing where it is installed, so a reader who does not act on
     // it has gained nothing.

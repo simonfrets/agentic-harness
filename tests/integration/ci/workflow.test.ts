@@ -36,6 +36,37 @@ const steps = (): readonly Step[] => {
   return list as readonly Step[];
 };
 
+/** Every Node version the matrix runs, across both the axis and the includes. */
+const nodeVersions = (): readonly string[] => {
+  const parsed: unknown = parse(workflow);
+  const gate =
+    typeof parsed === "object" && parsed !== null && "jobs" in parsed
+      ? (parsed.jobs as Record<string, unknown>).gate
+      : null;
+  const strategy =
+    typeof gate === "object" && gate !== null && "strategy" in gate
+      ? (gate.strategy as Record<string, unknown>)
+      : null;
+  const matrix =
+    strategy === null ? null : (matrixOf(strategy) as Record<string, unknown>);
+
+  if (matrix === null) {
+    throw new Error("the CI workflow has no matrix");
+  }
+
+  const axis = Array.isArray(matrix.node) ? (matrix.node as string[]) : [];
+  const included = Array.isArray(matrix.include)
+    ? (matrix.include as Record<string, unknown>[]).map((entry) =>
+        String(entry.node)
+      )
+    : [];
+
+  return [...axis, ...included];
+};
+
+const matrixOf = (strategy: Record<string, unknown>): unknown =>
+  strategy.matrix;
+
 const commands = (): readonly string[] =>
   steps().flatMap((step) => (step.run === undefined ? [] : [step.run]));
 
@@ -59,12 +90,28 @@ describe("this repository's CI workflow", () => {
     expect(workflow).toContain("macos-latest");
   });
 
-  it("takes its Node version from engines, so the two cannot drift", () => {
-    const setup = steps().find((step) =>
-      step.uses?.startsWith("actions/setup-node")
+  it("proves the project on the oldest Node it claims to support", () => {
+    // `node-version-file: package.json` reads `engines.node`, which is a
+    // range, and setup-node resolves a range to the newest version satisfying
+    // it - so the declared minimum would never once have been run.
+    const engines: unknown = JSON.parse(
+      readFileSync(join(process.cwd(), "package.json"), "utf8")
     );
+    const declared =
+      typeof engines === "object" && engines !== null && "engines" in engines
+        ? engines.engines
+        : null;
+    const minimum =
+      typeof declared === "object" && declared !== null && "node" in declared
+        ? String(declared.node).replace(/^>=/, "")
+        : "";
 
-    expect(setup?.with).toMatchObject({ "node-version-file": "package.json" });
+    expect(minimum).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(nodeVersions()).toContain(minimum);
+  });
+
+  it("also runs a newer Node, so a future release cannot break it unseen", () => {
+    expect(nodeVersions().length).toBeGreaterThan(1);
   });
 
   it("never lets a failing step pass", () => {

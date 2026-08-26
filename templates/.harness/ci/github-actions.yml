@@ -30,17 +30,26 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          # Cached against the harness's own lockfile, not the project's. The
+          # private tree under .harness/ is always npm by design; the project
+          # may not be, and pointing this at a package-lock.json that does not
+          # exist fails the step outright.
           cache: npm
+          cache-dependency-path: .harness/package-lock.json
 
-      # The gates run this project's own scripts, so its dependencies have to
-      # be present before any of them can run.
+      # Replace this with your own package manager if the project is not on
+      # npm - `pnpm install --frozen-lockfile`, `yarn install --immutable`,
+      # `bun install --frozen-lockfile`. The gates run this project's own
+      # scripts, so its dependencies have to be present before any of them can.
       - name: Install project dependencies
         run: npm ci
 
       # .harness/node_modules is machine-local and git-ignored, so the private
-      # tree is resolved here. This needs .harness/package-lock.json to be
-      # committed; `harness init` produces it. Use `npm install --omit=dev` if
-      # you have deliberately not committed that lockfile.
+      # tree is resolved here. This is npm whatever the project uses: resolving
+      # it with the project's manager would apply that manager's workspace
+      # rules and, in a monorepo, hoist the harness's dependencies into the
+      # workspace root. It needs .harness/package-lock.json committed, which
+      # `harness init` produces.
       - name: Resolve the harness runtime
         run: npm ci --omit=dev
         working-directory: .harness
