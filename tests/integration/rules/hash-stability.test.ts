@@ -2,7 +2,12 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 
 import { loadRuleBundle } from "../../../src/rules/load-rule-bundle.js";
+import {
+  canonicalRuleSet,
+  canonicalStringify,
+} from "../../../src/rules/hash-rule-set.js";
 import { resolveRuleSet } from "../../../src/rules/resolve-rule-set.js";
+import type { ResolvedRuleSet } from "../../../src/rules/resolve-rule-set.js";
 import {
   createTempDirectory,
   removeTempDirectories,
@@ -75,7 +80,10 @@ version: 1
 
 `;
 
-const hashFromDirectory = (directory: string, contents: string): string => {
+const ruleSetFromDirectory = (
+  directory: string,
+  contents: string
+): ResolvedRuleSet => {
   const path = join(directory, "typescript.yaml");
 
   writeFileSync(path, contents);
@@ -84,8 +92,13 @@ const hashFromDirectory = (directory: string, contents: string): string => {
     source: relative(directory, path),
   });
 
-  return resolveRuleSet([{ origin: "project", bundle, location: path }]).sha256;
+  // `location` is the absolute path, which is exactly what must not survive
+  // into anything the digest is taken over.
+  return resolveRuleSet([{ origin: "project", bundle, location: path }]);
 };
+
+const hashFromDirectory = (directory: string, contents: string): string =>
+  ruleSetFromDirectory(directory, contents).sha256;
 
 afterEach(() => {
   removeTempDirectories();
@@ -106,12 +119,20 @@ describe("rule-set hash stability", () => {
     expect(hashB).toBe(hashA);
   });
 
-  it("never embeds a path from either directory in the digest", () => {
+  it("never embeds a path from the directory in what it hashes", () => {
+    // Asserting the *digest* holds no path could never fail: a SHA-256 hex
+    // string cannot contain a path separator. What can fail is the canonical
+    // content the digest is taken over.
     const directory = createTempDirectory("agentic-harness-rules-c-");
-    const hash = hashFromDirectory(directory, LAYOUT_A);
+    const ruleSet = ruleSetFromDirectory(directory, LAYOUT_A);
 
-    expect(hash).not.toContain(directory);
-    expect(hash).toMatch(/^[0-9a-f]{64}$/);
+    const canonical = canonicalStringify(canonicalRuleSet(ruleSet.rules));
+
+    // Guarded against the empty case: `not.toContain` on an empty string
+    // passes for the same reason the digest assertion did.
+    expect(canonical).toContain("typescript.no-explicit-any");
+    expect(canonical).not.toContain(directory);
+    expect(ruleSet.sha256).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it("still differs when the rules genuinely differ", () => {

@@ -17,6 +17,8 @@ describe("CLI exit codes", () => {
   });
 
   it("maps every harness error kind to a nonzero code", () => {
+    expect(HARNESS_ERROR_KINDS.length).toBeGreaterThan(0);
+
     for (const kind of HARNESS_ERROR_KINDS) {
       expect(exitCodeForHarnessError(kind)).toBeGreaterThan(0);
     }

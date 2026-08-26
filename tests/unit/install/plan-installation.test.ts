@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 import { HarnessError } from "../../../src/harness/harness-error.js";
@@ -219,18 +219,26 @@ describe("planInstallation", () => {
   });
 
   it("writes nothing at all", () => {
-    const root = buildHarnessProject();
+    // The `.harness` directory has to exist, or the ENOENT this used to assert
+    // came from the fixture rather than from the planner declining to write.
+    const root = buildHarnessProject({
+      files: { ".harness/rules/git.yaml": SHIPPED },
+    });
 
     planInstallation({
       projectRoot: root,
-      desired: desiredRule(),
+      desired: [
+        { path: RULE, contents: SHIPPED, kind: "managed" },
+        { path: "rules/git.yaml", contents: "changed\n", kind: "seeded" },
+      ],
       manifest: null,
-      update: false,
+      update: true,
     });
 
-    expect(() =>
-      readFileSync(join(root, ".harness", "rules", "base.yaml"), "utf8")
-    ).toThrow();
+    expect(readdirSync(join(root, ".harness", "rules"))).toEqual(["git.yaml"]);
+    expect(
+      readFileSync(join(root, ".harness", "rules", "git.yaml"), "utf8")
+    ).toBe(SHIPPED);
   });
 });
 

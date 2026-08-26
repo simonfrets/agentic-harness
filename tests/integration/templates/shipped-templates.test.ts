@@ -66,6 +66,11 @@ describe("shipped rule bundles", () => {
   });
 
   it("targets only the six built-in agents", () => {
+    // Membership alone let a seventh id be added without failing, and an empty
+    // rule list made the whole loop vacuous.
+    expect(BUILT_IN_AGENT_IDS).toHaveLength(6);
+    expect(allRules.length).toBeGreaterThan(0);
+
     for (const rule of allRules) {
       expect(rule.appliesTo.length).toBeGreaterThan(0);
       for (const agent of rule.appliesTo) {
@@ -338,12 +343,18 @@ describe("the shipped config files", () => {
     // Both files are seeded: written once and then owned by the project. A
     // later harness that adds a key must not invalidate a copy written before
     // that key existed, which holds only while every key has a default.
-    expect(() =>
+    // `not.toThrow()` alone would pass on defaults that had drifted away from
+    // what the shipped files say, which is the thing seeding depends on.
+    expect(
       loadProjectConfig("version: 1\n", { source: "config/project.yaml" })
-    ).not.toThrow();
-    expect(() =>
+    ).toEqual(
+      loadProjectConfig(readConfig("config/project.yaml"), {
+        source: "config/project.yaml",
+      })
+    );
+    expect(
       loadHooksConfig("version: 1\n", { source: "config/hooks.yaml" })
-    ).not.toThrow();
+    ).toMatchObject({ version: 1, onExistingHook: "chain", hooks: [] });
   });
 
   it("runs each hook endpoint at its own phase", () => {

@@ -49,6 +49,8 @@ describe("buildPackageManagerCommand", () => {
   });
 
   it("never lets a script name collide with a package manager subcommand", () => {
+    expect(PACKAGE_MANAGERS).toHaveLength(4);
+
     for (const packageManager of PACKAGE_MANAGERS) {
       expect(
         buildPackageManagerCommand(packageManager, "build", []).args[0]

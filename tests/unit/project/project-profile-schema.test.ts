@@ -27,8 +27,15 @@ describe("package manager and validation mode enums", () => {
     expect(packageManagerSchema.safeParse("cargo").success).toBe(false);
   });
 
-  it("defaults conceptually to running native and harness checks together", () => {
-    expect([...VALIDATION_MODES]).toContain("native-plus-harness");
+  it("offers exactly the three validation modes", () => {
+    // `toContain` let the set grow or the default move without failing. The
+    // default itself is pinned in tests/unit/config/project-config.test.ts,
+    // which is where it is actually decided.
+    expect([...VALIDATION_MODES]).toEqual([
+      "harness-only",
+      "native-only",
+      "native-plus-harness",
+    ]);
   });
 });
 

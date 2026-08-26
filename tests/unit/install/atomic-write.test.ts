@@ -53,6 +53,9 @@ describe("writeFileAtomic", () => {
     expect(() => {
       writeFileAtomic(target, "x\n", 0o644);
     }).toThrow();
-    expect(readdirSync(target)).toEqual(["child.txt"]);
+    // The temporary is a sibling of the destination, so it lands in `root`.
+    // Listing `target` inspected a directory it could never appear in, and
+    // stayed green with the cleanup deleted entirely.
+    expect(readdirSync(root)).toEqual(["directory-in-the-way"]);
   });
 });

@@ -12,6 +12,8 @@ describe("harness layout", () => {
   });
 
   it("keeps every managed path relative to the harness directory", () => {
+    expect(Object.values(HARNESS_PATHS).length).toBeGreaterThan(0);
+
     for (const path of Object.values(HARNESS_PATHS)) {
       expect(path.startsWith("/")).toBe(false);
       expect(path.startsWith(".harness")).toBe(false);

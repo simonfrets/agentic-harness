@@ -170,6 +170,8 @@ describe("public API surface", () => {
   it("resolves every exported binding to a defined value", () => {
     const surface: Record<string, unknown> = harness;
 
+    expect(PUBLIC_API.length).toBeGreaterThan(0);
+
     for (const name of PUBLIC_API) {
       expect(surface[name]).toBeDefined();
     }

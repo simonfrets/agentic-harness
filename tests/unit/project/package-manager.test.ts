@@ -33,6 +33,8 @@ describe("parseDeclaredPackageManager", () => {
 
 describe("detectLockfilePackageManagers", () => {
   it("maps every known lockfile to its manager", () => {
+    expect(LOCKFILE_PACKAGE_MANAGERS.size).toBeGreaterThan(0);
+
     for (const [lockfile, manager] of LOCKFILE_PACKAGE_MANAGERS) {
       expect(detectLockfilePackageManagers([lockfile])).toEqual([manager]);
     }
