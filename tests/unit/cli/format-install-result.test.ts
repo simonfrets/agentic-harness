@@ -12,6 +12,7 @@ const RESULT: InstallHarnessResult = {
   orphaned: [],
   removed: [],
   dependenciesInstalled: true,
+  dependencyFailure: null,
   hooks: [],
   previousHooksPath: null,
   previousHooksPathScope: null,
@@ -141,6 +142,21 @@ describe("formatInstallResult", () => {
 
   it("says nothing about hooks when it manages none", () => {
     expect(format()).not.toContain("dispatches");
+  });
+
+  it("still reports the install when the runtime could not be resolved", () => {
+    // Throwing here used to discard the whole summary, leaving an npm error as
+    // the only thing anyone saw.
+    const text = format({
+      created: ["rules/base.yaml"],
+      dependenciesInstalled: false,
+      dependencyFailure: "npm install failed\nnpm error code ETARGET",
+    });
+
+    expect(text).toContain("  + rules/base.yaml");
+    expect(text).toContain("git hooks were left alone");
+    expect(text).toContain("  npm error code ETARGET");
+    expect(text).toContain("re-run `harness init`");
   });
 
   it("pluralises the file count", () => {

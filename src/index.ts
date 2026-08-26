@@ -22,7 +22,10 @@ export {
   describeFailure,
 } from "./harness/harness-error.js";
 export type { HarnessErrorKind } from "./harness/harness-error.js";
-export { readPackageVersion } from "./harness/package-version.js";
+export {
+  readPackageRepository,
+  readPackageVersion,
+} from "./harness/package-version.js";
 export { readTextFileIfPresent } from "./harness/read-text-file.js";
 export { resolveProjectRoot } from "./harness/resolve-project-root.js";
 export type { ResolveProjectRootOptions } from "./harness/resolve-project-root.js";
@@ -250,9 +253,13 @@ export {
   RUNTIME_INSTALL_TIMEOUT_MS,
   RUNTIME_PACKAGE_NAME,
   buildRuntimePackageManifest,
+  harnessReleaseTarballUrl,
   installRuntimeDependencies,
 } from "./install/runtime-dependencies.js";
-export type { InstallRuntimeDependenciesOptions } from "./install/runtime-dependencies.js";
+export type {
+  InstallRuntimeDependenciesOptions,
+  RuntimePackageManifestInput,
+} from "./install/runtime-dependencies.js";
 export { installHarness } from "./install/install-harness.js";
 export type {
   InstallHarnessOptions,

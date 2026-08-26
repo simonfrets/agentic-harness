@@ -142,10 +142,30 @@ Runtime dependencies are resolved into `.harness/node_modules/` by npm running
 with `.harness/` as its working directory — npm regardless of what the host
 project uses, because resolving this tree with the project's package manager
 would apply that manager's workspace rules and, in a monorepo, hoist the
-harness's dependencies into the workspace root. Files and the manifest are
-written before dependencies, so an install interrupted by a failing
-`npm install` leaves a project the harness still recognises as its own and a
-re-run repairs it.
+harness's dependencies into the workspace root.
+
+The harness is **not published to npm**. The generated `.harness/package.json`
+pins one exact GitHub release asset — the tarball `npm pack` produces, attached
+to the release for that version:
+
+```json
+"dependencies": {
+  "agentic-harness": "https://github.com/<owner>/<repo>/releases/download/v0.1.0/agentic-harness-0.1.0.tgz"
+}
+```
+
+npm installs a remote tarball without cloning or building anything, which a
+`github:owner/repo` dependency would have to do — and `dist/` is not committed,
+so there would be nothing there to install. The owner and name come from this
+package's own `repository` field, so a fork installs from the fork.
+
+Files and the manifest are written before dependencies, so an install
+interrupted by a failing download leaves a project the harness still recognises
+as its own and a re-run repairs it. Git hooks are pointed at the harness
+**last**, only once the runtime they invoke is actually present: activating them
+first left a repository that could not commit at all, because every hook ran a
+launcher with nothing behind it. A failed install reports everything it did
+write, leaves hooks alone, and exits `5`.
 
 `harness doctor` checks Node, npm, Git, Bash, the installation manifest, the
 configuration files, the rule set, the private dependency tree, Git hook

@@ -7,6 +7,7 @@ import {
   RUNTIME_INSTALL_TIMEOUT_MS,
   RUNTIME_PACKAGE_NAME,
   buildRuntimePackageManifest,
+  harnessReleaseTarballUrl,
   installRuntimeDependencies,
 } from "../../../src/install/runtime-dependencies.js";
 import { captureRejection } from "../../helpers/expect-error.js";
@@ -23,8 +24,16 @@ import type { PlannedCommandResult } from "../../helpers/fake-command-runner.js"
 const PROJECT_ROOT = join("/tmp", "host-project");
 
 describe("buildRuntimePackageManifest", () => {
-  it("pins the running harness version as the only dependency", () => {
-    const manifest: unknown = JSON.parse(buildRuntimePackageManifest("1.2.3"));
+  const build = (harnessVersion = "1.2.3"): string =>
+    buildRuntimePackageManifest({
+      harnessVersion,
+      repository: "an-owner/a-repo",
+    });
+
+  it("pins one exact GitHub release asset as the only dependency", () => {
+    // The harness is not published to npm, so the dependency is the tarball
+    // `npm pack` produces, attached to the release for its version.
+    const manifest: unknown = JSON.parse(build());
 
     expect(manifest).toEqual({
       name: RUNTIME_PACKAGE_NAME,
@@ -32,19 +41,38 @@ describe("buildRuntimePackageManifest", () => {
       private: true,
       description:
         "Private dependency tree for the agentic harness installed in this project.",
-      dependencies: { [HARNESS_PACKAGE_NAME]: "1.2.3" },
+      dependencies: {
+        [HARNESS_PACKAGE_NAME]:
+          "https://github.com/an-owner/a-repo/releases/download/v1.2.3/agentic-harness-1.2.3.tgz",
+      },
     });
   });
 
+  it("names a tarball, not a git ref", () => {
+    // A `github:owner/repo` dependency would make npm clone and build, and
+    // this package does not commit its `dist/`, so there would be nothing to
+    // install.
+    expect(build()).toContain(".tgz");
+    expect(build()).not.toContain("github:");
+  });
+
   it("marks the tree private so it can never be published by accident", () => {
-    expect(buildRuntimePackageManifest("0.1.0")).toContain('"private": true');
+    expect(build()).toContain('"private": true');
   });
 
   it("writes formatted json with a trailing newline", () => {
-    const text = buildRuntimePackageManifest("0.1.0");
+    const text = build();
 
     expect(text.endsWith("}\n")).toBe(true);
     expect(text).toContain('\n  "name":');
+  });
+});
+
+describe("harnessReleaseTarballUrl", () => {
+  it("points at the asset name `npm pack` produces", () => {
+    expect(harnessReleaseTarballUrl("owner/repo", "0.1.0")).toBe(
+      "https://github.com/owner/repo/releases/download/v0.1.0/agentic-harness-0.1.0.tgz"
+    );
   });
 });
 

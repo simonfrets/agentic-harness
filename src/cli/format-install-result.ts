@@ -86,12 +86,21 @@ export const formatInstallResult = (result: InstallHarnessResult): string => {
     }
   }
 
-  lines.push(
-    "",
-    result.dependenciesInstalled
-      ? `Runtime dependencies resolved in ${HARNESS_DIRECTORY}/node_modules`
-      : "Runtime dependencies were not installed"
-  );
+  if (result.dependencyFailure === null) {
+    lines.push(
+      "",
+      result.dependenciesInstalled
+        ? `Runtime dependencies resolved in ${HARNESS_DIRECTORY}/node_modules`
+        : "Runtime dependencies were not installed"
+    );
+  } else {
+    lines.push(
+      "",
+      `The runtime could not be resolved, so git hooks were left alone and this project still commits normally:`,
+      ...result.dependencyFailure.split("\n").map((line) => `  ${line}`),
+      "Everything above is on disk; re-run `harness init` once that is fixed."
+    );
+  }
 
   return `${lines.join("\n")}\n`;
 };
