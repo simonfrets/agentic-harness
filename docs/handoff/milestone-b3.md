@@ -1,3 +1,9 @@
+> **Archived handoff.** B3 and B4 are complete as of `1dfff4f`. The current
+> state, the defects found while finishing them, and the Milestone C scope are
+> in `docs/handoff/milestone-c.md`.
+
+---
+
 # Milestone B3 handoff: idempotent installation and `harness doctor`
 
 ## How to start
