@@ -9,10 +9,29 @@ import { writeFileAtomic } from "./atomic-write.js";
 export const INSTALL_MANIFEST_VERSION = 1;
 const MANIFEST_MODE = 0o644;
 
+/**
+ * Who owns a file the harness put in a project.
+ *
+ * A `managed` file is the harness's: it is kept in step with the template it
+ * came from, and an edit to it is a conflict. A `seeded` file is written once,
+ * when it is absent, and then belongs to the project — `config/project.yaml`
+ * exists to be edited, so reconciling it against the template would make
+ * editing it the thing that breaks the next `harness init`.
+ */
+export const MANAGED_FILE_KINDS = ["managed", "seeded"] as const;
+export const managedFileKindSchema = z.enum(MANAGED_FILE_KINDS);
+
 export const managedFileEntrySchema = z.strictObject({
   /** Path relative to the `.harness` directory, with `/` separators. */
   path: z.string().min(1),
+  /** Hash of the content on disk after the install that recorded it. */
   sha256: z.string().regex(/^[0-9a-f]{64}$/),
+  /**
+   * Defaults to `managed` so a manifest written before seeding existed still
+   * parses. Nothing reads it to decide an outcome: ownership is a property of
+   * the shipped template, which is what migrates an older installation.
+   */
+  kind: managedFileKindSchema.default("managed"),
 });
 
 /** What the manifest remembers about one hook the harness took over. */
@@ -49,6 +68,7 @@ export const installManifestSchema = z.strictObject({
   previousHooksPath: z.string().min(1).nullable().default(null),
 });
 
+export type ManagedFileKind = z.output<typeof managedFileKindSchema>;
 export type ManagedFileEntry = z.output<typeof managedFileEntrySchema>;
 export type HookRecord = z.output<typeof hookRecordSchema>;
 export type InstallManifest = z.output<typeof installManifestSchema>;

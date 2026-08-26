@@ -1,11 +1,10 @@
-import { readFileSync } from "node:fs";
-
 import { HarnessError } from "../harness/harness-error.js";
 import { HARNESS_DIRECTORY, harnessPath } from "../harness/layout.js";
+import { readTextFileIfPresent } from "../harness/read-text-file.js";
 import { compareCodeUnits } from "../rules/hash-rule-set.js";
 import type { HarnessTemplateFile } from "./harness-templates.js";
 import { hashManagedFile } from "./install-manifest.js";
-import type { InstallManifest } from "./install-manifest.js";
+import type { InstallManifest, ManagedFileKind } from "./install-manifest.js";
 
 export const INSTALL_ACTIONS = ["create", "keep", "replace"] as const;
 export type InstallAction = (typeof INSTALL_ACTIONS)[number];
@@ -14,8 +13,10 @@ export interface PlannedFile {
   /** Path relative to the `.harness` directory, with `/` separators. */
   readonly path: string;
   readonly action: InstallAction;
+  /** What will be on disk afterwards: the project's copy of a kept file. */
   readonly contents: string;
   readonly sha256: string;
+  readonly kind: ManagedFileKind;
 }
 
 export interface InstallationPlan {
@@ -41,21 +42,18 @@ export interface PlanInstallationInput {
 export interface PlannedFileSource {
   readonly path: string;
   readonly contents: string;
+  readonly kind: ManagedFileKind;
 }
 
 /** Renders a template file into the content the installer intends to write. */
 export const toPlannedFileSource = (
   file: HarnessTemplateFile,
   contents: string
-): PlannedFileSource => ({ path: file.installedPath, contents });
-
-const readIfPresent = (path: string): string | null => {
-  try {
-    return readFileSync(path, "utf8");
-  } catch {
-    return null;
-  }
-};
+): PlannedFileSource => ({
+  path: file.installedPath,
+  contents,
+  kind: file.seeded ? "seeded" : "managed",
+});
 
 /**
  * Decides what installing would do to each managed file, without touching disk.
@@ -79,25 +77,34 @@ export const planInstallation = (
 
   for (const source of input.desired) {
     const absolute = harnessPath(input.projectRoot, ...source.path.split("/"));
-    const existing = readIfPresent(absolute);
-    const sha256 = hashManagedFile(source.contents);
+    const existing = readTextFileIfPresent(absolute);
     const where = `${HARNESS_DIRECTORY}/${source.path}`;
-    const plan = (action: InstallAction): void => {
+    // The hash recorded is always of what will be on disk once the install
+    // finishes, which for a kept file is the copy already there.
+    const plan = (action: InstallAction, contents: string): void => {
       files.push({
         path: source.path,
         action,
-        contents: source.contents,
-        sha256,
+        contents,
+        sha256: hashManagedFile(contents),
+        kind: source.kind,
       });
     };
 
     if (existing === null) {
-      plan("create");
+      plan("create", source.contents);
+      continue;
+    }
+
+    // A seeded file belongs to the project from the moment it exists, so it is
+    // never compared against the template and can never raise a conflict.
+    if (source.kind === "seeded") {
+      plan("keep", existing);
       continue;
     }
 
     if (existing === source.contents) {
-      plan("keep");
+      plan("keep", existing);
       continue;
     }
 
@@ -122,7 +129,7 @@ export const planInstallation = (
       continue;
     }
 
-    plan("replace");
+    plan("replace", source.contents);
   }
 
   if (conflicts.length > 0) {

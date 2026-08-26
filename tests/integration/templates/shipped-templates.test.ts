@@ -35,9 +35,12 @@ const ruleBundleFiles = listHarnessTemplateFiles(packageRoot).filter((file) =>
 const sources: readonly RuleSource[] = ruleBundleFiles.map((file) => ({
   origin: "builtin" as const,
   location: file.installedPath,
-  bundle: loadRuleBundle(readHarnessTemplateFile(packageRoot, file), {
-    source: file.installedPath,
-  }),
+  bundle: loadRuleBundle(
+    readHarnessTemplateFile(packageRoot, file.templatePath),
+    {
+      source: file.installedPath,
+    }
+  ),
 }));
 
 const allRules: readonly Rule[] = sources.flatMap(
@@ -140,10 +143,7 @@ describe("the shipped .gitignore", () => {
 
   const buildRepository = (): string => {
     const root = createTempDirectory("agentic-harness-gitignore-");
-    const contents = readHarnessTemplateFile(packageRoot, {
-      templatePath: "gitignore",
-      installedPath: ".gitignore",
-    });
+    const contents = readHarnessTemplateFile(packageRoot, "gitignore");
     const target = join(root, ".harness", ".gitignore");
 
     initRepository(root);
@@ -192,7 +192,7 @@ const agentFiles = listHarnessTemplateFiles(packageRoot).filter((file) =>
 );
 
 const definitions: readonly AgentDefinition[] = agentFiles.map((file) =>
-  loadAgentDefinition(readHarnessTemplateFile(packageRoot, file), {
+  loadAgentDefinition(readHarnessTemplateFile(packageRoot, file.templatePath), {
     source: file.installedPath,
   })
 );
@@ -235,7 +235,7 @@ describe("the shipped agent definitions", () => {
 
   it("names no provider or model id", () => {
     for (const file of agentFiles) {
-      const text = readHarnessTemplateFile(packageRoot, file);
+      const text = readHarnessTemplateFile(packageRoot, file.templatePath);
 
       expect(text).not.toMatch(/claude|codex|gpt|anthropic|openai/i);
     }
@@ -277,10 +277,7 @@ describe("the shipped agent definitions", () => {
 
 describe("the shipped config files", () => {
   const readConfig = (installedPath: string): string =>
-    readHarnessTemplateFile(packageRoot, {
-      templatePath: installedPath,
-      installedPath,
-    });
+    readHarnessTemplateFile(packageRoot, installedPath);
 
   it("defaults the project to native-plus-harness validation", () => {
     const config = loadProjectConfig(readConfig("config/project.yaml"), {
@@ -301,6 +298,18 @@ describe("the shipped config files", () => {
 
     expect(config.onExistingHook).toBe("chain");
     expect(config.hooks.map((entry) => entry.hook)).toEqual([...HOOK_NAMES]);
+  });
+
+  it("stays valid when only its version key survives", () => {
+    // Both files are seeded: written once and then owned by the project. A
+    // later harness that adds a key must not invalidate a copy written before
+    // that key existed, which holds only while every key has a default.
+    expect(() =>
+      loadProjectConfig("version: 1\n", { source: "config/project.yaml" })
+    ).not.toThrow();
+    expect(() =>
+      loadHooksConfig("version: 1\n", { source: "config/hooks.yaml" })
+    ).not.toThrow();
   });
 
   it("runs each hook endpoint at its own phase", () => {

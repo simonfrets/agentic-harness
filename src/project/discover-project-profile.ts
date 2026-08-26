@@ -1,6 +1,14 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
+import { loadProjectConfig } from "../config/project-config.js";
+import type { ProjectConfig } from "../config/project-config.js";
+import {
+  HARNESS_DIRECTORY,
+  HARNESS_PATHS,
+  harnessPath,
+} from "../harness/layout.js";
+import { readTextFileIfPresent } from "../harness/read-text-file.js";
 import type { CommandRunner } from "../processes/command-runner.js";
 import { PROJECT_SCRIPT_NAMES } from "../rules/rule-schema.js";
 import type { ProjectScriptName } from "../rules/rule-schema.js";
@@ -104,6 +112,29 @@ const detectHookEntrypoints = (root: string): readonly HookEntrypoint[] => {
   return entrypoints;
 };
 
+/**
+ * Reads the two decisions discovery cannot make for itself.
+ *
+ * A project that has not installed the harness has no file here, and the schema
+ * defaults stand in for it. A file that is present and invalid is reported
+ * rather than ignored: silently falling back would mean a project that set
+ * `validationMode` and mistyped it gets the opposite of what it asked for.
+ */
+const readInstalledConfig = (root: string): ProjectConfig => {
+  const source = `${HARNESS_DIRECTORY}/${HARNESS_PATHS.projectConfig}`;
+  const text = readTextFileIfPresent(
+    harnessPath(root, HARNESS_PATHS.projectConfig)
+  );
+
+  return text === null
+    ? {
+        version: 1,
+        validationMode: "native-plus-harness",
+        packageManager: null,
+      }
+    : loadProjectConfig(text, { source });
+};
+
 export interface DiscoverProjectProfileOptions {
   /** Absolute path to the project root. */
   readonly root: string;
@@ -112,8 +143,8 @@ export interface DiscoverProjectProfileOptions {
 }
 
 /**
- * Builds a `ProjectProfile` by reading the project's files and its local git
- * configuration.
+ * Builds a `ProjectProfile` by reading the project's files, its installed
+ * harness configuration, and its local git configuration.
  *
  * Discovery is read-only: it never executes a project script. The one command
  * it runs is `git config --local --get core.hooksPath`, because git resolves
@@ -125,6 +156,7 @@ export const discoverProjectProfile = async (
   const { root, runner } = options;
   const entries = listDirectory(root);
   const manifest = readJsonFile(join(root, "package.json"));
+  const config = readInstalledConfig(root);
 
   const hooksPathResult = await runner({
     command: {
@@ -145,9 +177,12 @@ export const discoverProjectProfile = async (
   return projectProfileSchema.parse({
     root,
     packageManager: resolvePackageManager({
-      declared: parseDeclaredPackageManager(
-        readDeclaredPackageManager(manifest)
-      ),
+      // A pin in the harness config wins over the host manifest: it exists
+      // precisely to settle a repository whose lockfiles disagree, which is
+      // the case the host manifest had already failed to settle.
+      declared:
+        config.packageManager ??
+        parseDeclaredPackageManager(readDeclaredPackageManager(manifest)),
       lockfiles: entries,
     }),
     availableScripts: [...readAvailableScripts(manifest)],
@@ -159,6 +194,6 @@ export const discoverProjectProfile = async (
       .sort(),
     gitHooksPath: gitHooksPath === "" ? null : gitHooksPath,
     existingHookEntrypoints: [...detectHookEntrypoints(root)],
-    validationMode: "native-plus-harness",
+    validationMode: config.validationMode,
   } satisfies ProjectProfile);
 };

@@ -16,7 +16,8 @@ host project by `harness init`, which `harness doctor` then checks.
 
 `harness init` also takes over the repository's Git hooks without discarding
 the ones the project already had, so a gate runs on an ordinary local commit
-rather than only when someone remembers to invoke it.
+rather than only when someone remembers to invoke it. The two configuration
+files it installs belong to the project and can be edited freely.
 
 Task state and the Codex and Claude adapters are **not** implemented yet.
 
@@ -94,11 +95,28 @@ and refuses to install outside a Git repository. Everything it writes lands
 under `.harness/`; the host project's `package.json`, ESLint configuration and
 lockfile are never read for writing and never modified.
 
-Each managed file is written through a temporary sibling and an atomic rename,
-so an interrupted install leaves the previous version intact rather than a
-truncated one. What happens to a file that is already there is decided before
-anything is written, from `.harness/version.json` — the manifest recording what
-the harness installed and the SHA-256 it wrote:
+Each installed file is written through a temporary sibling and an atomic
+rename, so an interrupted install leaves the previous version intact rather
+than a truncated one.
+
+Installed files come in two kinds, and `.harness/version.json` — the manifest —
+records which is which:
+
+- **managed** files are the harness's. `rules/`, `agents/`, the hook
+  dispatchers, the launcher and `package.json` are kept in step with the
+  version that installed them, and an edit to one is a conflict.
+- **seeded** files are the project's. `config/project.yaml` and
+  `config/hooks.yaml` carry the only decisions discovery cannot make, so they
+  are written once, when absent, and never reconciled again. They exist to be
+  edited; a harness that refused to run afterwards would be refusing to run
+  because it had been configured.
+
+Ownership is a property of the shipped file, not of the manifest entry, so a
+project installed by an earlier version is reclassified on its next install
+rather than needing a migration.
+
+What happens to a **managed** file that is already there is decided before
+anything is written, from the manifest's record of the SHA-256 it wrote:
 
 | On disk | In the manifest | Content               | `--update` | Outcome                   |
 | ------- | --------------- | --------------------- | ---------- | ------------------------- |
@@ -108,6 +126,9 @@ the harness installed and the SHA-256 it wrote:
 | present | entry           | local ≠ manifest hash | –          | refused: locally modified |
 | present | entry           | differs               | no         | refused: needs `--update` |
 | present | entry           | differs               | yes        | replaced                  |
+
+A **seeded** file that already exists is kept, whatever it now contains and
+whether or not `--update` was given, so it can never appear in that table.
 
 Every conflict in a project is collected and reported once, so a half-adopted
 installation is untangled in one pass instead of one file per re-run. Nothing
@@ -157,7 +178,9 @@ never masks a hook the project relies on, and the exit code a developer sees is
 that hook's own.
 
 `config/hooks.yaml` sets the policy. `onExistingHook: chain` is the default and
-`abort` refuses the installation instead. There is no `replace`.
+`abort` refuses the installation instead. There is no `replace`. It is a seeded
+file, so the installed copy is what installation reads: disabling a hook or
+switching to `abort` takes effect on the next `harness init`.
 
 A preserved hook inside the repository is recorded relative to the project root
 and re-joined at run time, so a dispatcher is the same file on every machine
@@ -273,7 +296,11 @@ applies to `execute` and `projectScripts`.
 
 `config/project.yaml` carries only the two decisions discovery cannot make: the
 validation mode, and a pinned package manager for a repository that carries two
-lockfiles. `config/hooks.yaml` says which Git hooks are managed and what to do
+lockfiles. `discoverProjectProfile` reads the installed copy, and a pin there
+wins over the host `package.json`'s own `packageManager` field — it exists to
+settle exactly the ambiguity that field had already failed to settle. A config
+file that is present but invalid is reported rather than ignored, so a mistyped
+setting cannot silently deliver the opposite of what was asked for. `config/hooks.yaml` says which Git hooks are managed and what to do
 when the project already has one — `chain` runs the existing hook and then the
 harness gate, `abort` stops. There is no `replace`.
 

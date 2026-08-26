@@ -485,6 +485,40 @@ describe("installHarness", () => {
     ).toEqual([]);
   });
 
+  it("lets a project edit its own configuration and still re-install", async () => {
+    const root = buildHostProject();
+    const packageRoot = buildPackage(TEMPLATES);
+
+    await install({ root, packageRoot });
+    writeFileSync(
+      join(root, ".harness", "config", "project.yaml"),
+      "version: 1\nvalidationMode: native-only\n"
+    );
+
+    const { result } = await install({ root, packageRoot });
+
+    expect(result.kept).toContain("config/project.yaml");
+    expect(read(root, "config/project.yaml")).toContain(
+      "validationMode: native-only"
+    );
+    expect(
+      readInstallManifest(root)?.managedFiles.filter(
+        (entry) => entry.kind === "seeded"
+      )
+    ).toEqual([
+      {
+        path: "config/hooks.yaml",
+        sha256: hashManagedFile(read(root, "config/hooks.yaml")),
+        kind: "seeded",
+      },
+      {
+        path: "config/project.yaml",
+        sha256: hashManagedFile("version: 1\nvalidationMode: native-only\n"),
+        kind: "seeded",
+      },
+    ]);
+  });
+
   it("records the hash of every managed file, including the generated manifest", async () => {
     const root = buildHostProject();
 

@@ -20,7 +20,9 @@ const MANIFEST: InstallManifest = {
   harnessVersion: "0.1.0",
   installedAt: "2026-08-26T00:00:00.000Z",
   updatedAt: "2026-08-26T00:00:00.000Z",
-  managedFiles: [{ path: "rules/base.yaml", sha256: "a".repeat(64) }],
+  managedFiles: [
+    { path: "rules/base.yaml", sha256: "a".repeat(64), kind: "managed" },
+  ],
   hooks: [{ hook: "pre-commit", chained: ".git/hooks/pre-commit" }],
   previousHooksPath: null,
 };

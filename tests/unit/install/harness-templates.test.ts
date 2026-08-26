@@ -1,5 +1,7 @@
 import { HarnessError } from "../../../src/harness/harness-error.js";
 import {
+  SEEDED_TEMPLATE_PATHS,
+  isSeededTemplate,
   listHarnessTemplateFiles,
   readHarnessTemplateFile,
   harnessTemplateRoot,
@@ -59,12 +61,42 @@ describe("listHarnessTemplateFiles", () => {
   });
 });
 
+describe("seeded templates", () => {
+  it("hands exactly the two configuration files to the project", () => {
+    // Adding a template is a decision about who owns it, so this list is
+    // asserted rather than derived from a path prefix.
+    expect(
+      listHarnessTemplateFiles(packageRoot)
+        .filter((file) => file.seeded)
+        .map((file) => file.installedPath)
+    ).toEqual([...SEEDED_TEMPLATE_PATHS]);
+  });
+
+  it("names only paths the package actually ships", () => {
+    const shipped = listHarnessTemplateFiles(packageRoot).map(
+      (file) => file.installedPath
+    );
+
+    for (const path of SEEDED_TEMPLATE_PATHS) {
+      expect(shipped).toContain(path);
+    }
+  });
+
+  it("keeps the rules and agents the harness maintains", () => {
+    for (const path of [
+      "rules/base.yaml",
+      "rules/custom/README.md",
+      "agents/coder.yaml",
+      ".gitignore",
+    ]) {
+      expect(isSeededTemplate(path)).toBe(false);
+    }
+  });
+});
+
 describe("readHarnessTemplateFile", () => {
   it("reads a template by its template path", () => {
-    const contents = readHarnessTemplateFile(packageRoot, {
-      templatePath: "rules/base.yaml",
-      installedPath: "rules/base.yaml",
-    });
+    const contents = readHarnessTemplateFile(packageRoot, "rules/base.yaml");
 
     expect(contents).toContain("id: harness-base");
   });

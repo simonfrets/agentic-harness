@@ -12,12 +12,35 @@ import { compareCodeUnits } from "../rules/hash-rule-set.js";
  */
 const GITIGNORE_TEMPLATE_NAME = "gitignore";
 
+/**
+ * Templates the project owns once they exist.
+ *
+ * These two files carry the only decisions discovery cannot make, so they are
+ * written to be edited. Reconciling them against the shipped copy would mean
+ * that editing one is what stops the next `harness init` from running, which
+ * makes the harness refuse to work because it was configured.
+ *
+ * The list is explicit rather than a `config/` prefix so that adding a template
+ * is a decision about ownership rather than an accident of where it was filed.
+ * A test asserts it against the shipped tree, so a path that stops existing
+ * fails the build instead of silently seeding nothing.
+ */
+export const SEEDED_TEMPLATE_PATHS = [
+  "config/hooks.yaml",
+  "config/project.yaml",
+] as const;
+
 export interface HarnessTemplateFile {
   /** Path inside the template tree. */
   readonly templatePath: string;
   /** Path relative to the installed `.harness` directory. */
   readonly installedPath: string;
+  /** True when the project owns this file after it is first written. */
+  readonly seeded: boolean;
 }
+
+export const isSeededTemplate = (installedPath: string): boolean =>
+  (SEEDED_TEMPLATE_PATHS as readonly string[]).includes(installedPath);
 
 export const harnessTemplateRoot = (packageRootDirectory: string): string =>
   join(packageRootDirectory, "templates", HARNESS_DIRECTORY);
@@ -62,21 +85,24 @@ export const listHarnessTemplateFiles = (
   }
 
   return paths
-    .map((templatePath) => ({
-      templatePath: toPosix(templatePath),
-      installedPath: installedPathOf(toPosix(templatePath)),
-    }))
+    .map((path) => {
+      const templatePath = toPosix(path);
+      const installedPath = installedPathOf(templatePath);
+
+      return {
+        templatePath,
+        installedPath,
+        seeded: isSeededTemplate(installedPath),
+      };
+    })
     .sort((a, b) => compareCodeUnits(a.installedPath, b.installedPath));
 };
 
 export const readHarnessTemplateFile = (
   packageRootDirectory: string,
-  file: HarnessTemplateFile
+  templatePath: string
 ): string =>
   readFileSync(
-    join(
-      harnessTemplateRoot(packageRootDirectory),
-      ...file.templatePath.split("/")
-    ),
+    join(harnessTemplateRoot(packageRootDirectory), ...templatePath.split("/")),
     "utf8"
   );

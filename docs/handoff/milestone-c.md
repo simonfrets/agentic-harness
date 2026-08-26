@@ -12,12 +12,13 @@ complete and this document supersedes them.
 
 - Worktree: `/Users/sinancoskun/Projects/agentic-harness-codex-basic-structure`
 - Branch: `codex/basic-structure`
-- HEAD: `1dfff4f Dispatch Git hooks without discarding existing ones`
+- HEAD: `4e643bb Separate seeded configuration from managed files`
 - Working tree clean. Nothing pushed; no remote for this branch.
 
 `npm run check`, `npm run build`, `npm run test:coverage` and
-`npm pack --dry-run` all pass: 484 tests across 50 suites at 99.15% statements
-against thresholds of 90/90/90/80.
+`npm pack --dry-run` all pass: 503 tests across 50 suites at 99.17% statements
+against thresholds of 90/90/90/80. `src/install` and `src/project` are at 100%
+on every metric.
 
 ### Committed since the last handoff
 
@@ -104,11 +105,15 @@ Read these before planning Milestone C. None is hidden by a passing test.
    `extensions.worktreeConfig`, changes repository configuration semantics
    globally and was judged too invasive to enable on a project's behalf.
 
-4. **`discoverProjectProfile` still hardcodes
-   `validationMode: "native-plus-harness"`** at
-   `src/project/discover-project-profile.ts:162`. `config/project.yaml` is
-   shipped, installed and validated, but nothing reads the installed copy yet.
-   Carried forward unchanged from the B3 handoff.
+4. ~~`discoverProjectProfile` still hardcodes `validationMode`.~~ **Fixed in
+   C0**, together with defect 2, since both are about reading a file the
+   project owns. The profile now reports the installed `validationMode`, and a
+   `packageManager` pin there wins over the host manifest's field. **Still
+   open: nothing acts on `validationMode`.** It is carried on the profile and
+   reported, but no gate filters on it, so `native-only` and `harness-only`
+   currently describe an intent the runtime does not honour. Deciding what they
+   filter — rule origin is the obvious axis — is open work, and is a change to
+   gate behaviour rather than to discovery.
 
 5. **`config/models.yaml` and `config/providers.yaml` remain deferred to
    Milestone D**, which validates provider flags against a real CLI `--help`.
@@ -126,7 +131,7 @@ a corrupted branch.
 2. **A type-only module reports 0% coverage.** Declare types beside the values
    they describe.
 3. **`src/index.ts` barrel re-exports count as functions.**
-   `tests/unit/index.test.ts` holds an explicit `PUBLIC_API` list — now 133
+   `tests/unit/index.test.ts` holds an explicit `PUBLIC_API` list — now 138
    entries — that must be updated whenever an export is added.
 4. **Never weaken a gate.** `AGENTS.md` forbids it. No lowered threshold, no
    ignore comment, no `--no-verify`.
@@ -145,17 +150,22 @@ a corrupted branch.
    fixture. `nodeCommandRunner` was never at risk; its environment allowlist
    already drops every `GIT_*` variable.
 7. **`tests/unit/install/harness-templates.test.ts` asserts the exact list of
-   shipped template paths**, currently 13. Adding a template fails it on
-   purpose. `bin/harness` and `hooks/*` are generated, not templates, and are
-   not in that list.
-8. **`buildHarnessProject()` does not create `.harness/`.** Pass
+   shipped template paths**, currently 13, _and_ the exact list of seeded ones.
+   Adding a template fails both on purpose: the second is what forces a
+   decision about who owns the new file. `bin/harness` and `hooks/*` are
+   generated, not templates, and are in neither list.
+8. **Seeding is only safe because every key in both config schemas has a
+   default.** A seeded file written by an older harness must still parse when a
+   later one adds a key. `shipped-templates.test.ts` asserts that
+   `version: 1` alone validates; do not add a required key to either schema.
+9. **`buildHarnessProject()` does not create `.harness/`.** Pass
    `files: { ".harness/…": … }`.
-9. **`prettier --check .` covers the whole repository**, templates included.
-10. **Yarn and Bun are not installed on this machine**; pnpm is. Prove their
+10. **`prettier --check .` covers the whole repository**, templates included.
+11. **Yarn and Bun are not installed on this machine**; pnpm is. Prove their
     behaviour through argument-vector unit tests.
-11. **`.husky/pre-commit` runs the full gate against the working tree**, not
+12. **`.husky/pre-commit` runs the full gate against the working tree**, not
     the index. To verify a commit on its own, move unrelated files aside first.
-12. **This is a Git worktree and the stash stack is shared.** Never use bare
+13. **This is a Git worktree and the stash stack is shared.** Never use bare
     `git stash` / `git stash pop`. Prefer a temporary WIP commit.
 
 ## Milestone C scope
@@ -188,6 +198,10 @@ never be shared by reference as one mutable global context.
 
 `tasks.yaml` is deliberately **not** ignored by the shipped `.gitignore`, so
 task state is reviewable in a pull request. `state/` is ignored.
+
+C0 already answered the question C1 has to answer again: `tasks.yaml` is
+neither managed nor seeded — the harness writes it continuously and the project
+never hand-edits it. It should not go through `planInstallation` at all.
 
 ## Commit boundaries
 
