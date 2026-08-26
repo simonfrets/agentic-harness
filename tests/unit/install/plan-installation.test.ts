@@ -40,6 +40,8 @@ const manifestOf = (
     path,
     sha256: hashManagedFile(contents),
   })),
+  hooks: [],
+  previousHooksPath: null,
 });
 
 const actionsOf = (plan: InstallationPlan): readonly string[] =>

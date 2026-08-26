@@ -24,7 +24,14 @@ import {
 } from "../../helpers/temp-directory.js";
 import type { CommandRequest } from "../../../src/processes/command-runner.js";
 
+/**
+ * A stand-in for the repository-local git config, so `harness doctor` reads
+ * back the `core.hooksPath` that `harness init` set in the same test.
+ */
+const gitConfig = new Map<string, string>();
+
 afterEach(() => {
+  gitConfig.clear();
   removeTempDirectories();
 });
 
@@ -63,14 +70,29 @@ const run = async (
 
     const { executable, args } = request.command;
 
-    if (executable === "git" && args[0] === "rev-parse") {
+    if (executable === "git" && args[1] === "--show-toplevel") {
       return exited(0, { stdout: `${root}\n` });
     }
 
-    // git exits non-zero for an unset key, which is how `core.hooksPath` reads
-    // in a project the harness has not wired hooks into yet.
+    if (executable === "git" && args[1] === "--git-common-dir") {
+      return exited(0, { stdout: ".git\n" });
+    }
+
     if (executable === "git" && args[0] === "config") {
-      return exited(1);
+      const [, , key, value] = args;
+
+      if (key === "--get") {
+        const stored = gitConfig.get(`${root}:${String(value)}`);
+
+        // git exits non-zero for an unset key, which is not an error.
+        return stored === undefined
+          ? exited(1)
+          : exited(0, { stdout: `${stored}\n` });
+      }
+
+      gitConfig.set(`${root}:${String(key)}`, String(value));
+
+      return exited(0);
     }
 
     return exited(0, { stdout: "1.2.3\n" });
@@ -117,7 +139,9 @@ describe("harness init", () => {
     expect(readdirSync(join(root, ".harness")).sort()).toEqual([
       ".gitignore",
       "agents",
+      "bin",
       "config",
+      "hooks",
       "package.json",
       "rules",
       "version.json",
@@ -156,7 +180,7 @@ describe("harness init", () => {
     expect(result.exitCode).toBe(CLI_EXIT_CODES.ok);
     expect(result.stdout).toContain(
       `0 files created, 0 replaced, ${String(
-        listHarnessTemplateFiles(packageRoot).length + 1
+        listHarnessTemplateFiles(packageRoot).length + 4
       )} already up to date`
     );
   });
@@ -197,9 +221,10 @@ describe("harness doctor", () => {
 
     expect(result.stdout).toContain("Harness diagnosis for");
     expect(result.stdout).toContain("OK   Rules —");
-    // Hooks are not wired until Milestone B4, which is a warning, not a fault.
-    expect(result.stdout).toContain("WARN Git hooks —");
-    expect(result.stdout).toContain("Result: 0 problems, 1 warning");
+    expect(result.stdout).toContain(
+      "OK   Git hooks — git dispatches pre-commit (pre-commit), pre-push (pre-push)"
+    );
+    expect(result.stdout).toContain("Result: healthy");
     expect(result.exitCode).toBe(CLI_EXIT_CODES.ok);
   });
 

@@ -14,10 +14,11 @@ and the `.harness/` installer: rule bundles are validated, layered, hashed,
 compiled into agent policies, executed as phase gates, and installed into a
 host project by `harness init`, which `harness doctor` then checks.
 
-Git hook dispatch, task state, and the Codex and Claude adapters are **not**
-implemented yet. `harness init` installs files and a private dependency tree;
-it does not yet touch a project's Git hooks, so a gate runs when it is invoked
-rather than on every commit.
+`harness init` also takes over the repository's Git hooks without discarding
+the ones the project already had, so a gate runs on an ordinary local commit
+rather than only when someone remembers to invoke it.
+
+Task state and the Codex and Claude adapters are **not** implemented yet.
 
 ## Requirements
 
@@ -131,6 +132,53 @@ reachability. It writes nothing, runs every check even after one fails, and
 exits `3` if any check is a problem. Warnings — an installation made by a
 different harness version, or hooks that are not dispatched through the harness
 — are reported without failing.
+
+## Git hooks
+
+`harness init` points the repository's local `core.hooksPath` at
+`.harness/hooks` and writes one dispatcher per hook. That setting is the single
+thing the harness changes outside `.harness/`, because Git cannot be told to
+look inside a directory from within that directory.
+
+Redirecting `core.hooksPath` stops **every** hook in the previous directory
+from running, not only the ones the harness has a gate for. So the installer
+first records what was active — `core.hooksPath` if it was set, otherwise the
+hooks directory of the common Git directory, which is where a linked worktree's
+hooks actually live — and generates a dispatcher for each of them:
+
+- a managed hook (`pre-commit` and `pre-push` by default) runs the preserved
+  hook first, unchanged, with the same arguments and the same standard input,
+  and then `harness gate <phase>`;
+- any other executable hook that was there gets a pass-through that runs the
+  original and nothing else.
+
+`set -e` means a failing preserved hook stops the dispatcher there. The gate
+never masks a hook the project relies on, and the exit code a developer sees is
+that hook's own.
+
+`config/hooks.yaml` sets the policy. `onExistingHook: chain` is the default and
+`abort` refuses the installation instead. There is no `replace`.
+
+A preserved hook inside the repository is recorded relative to the project root
+and re-joined at run time, so a dispatcher is the same file on every machine
+that checks the project out. Once Git dispatches through the harness,
+`.harness/version.json` is the only surviving record of what was there before,
+and a re-install reads it rather than inspecting its own dispatchers and
+chaining the harness to itself.
+
+`.harness/bin/harness` is the executable the dispatchers call. It runs the CLI
+from `.harness/node_modules/`, so a hook runs the version this project
+installed rather than whichever global one is first on `PATH`, and exits `3`
+with a clear message when the runtime has not been installed.
+
+### Worktrees
+
+`core.hooksPath` is repository-local configuration, which Git shares across
+every linked worktree. The harness therefore writes a **relative** value, so
+each worktree resolves its own `.harness/hooks`. The consequence is worth
+stating plainly: installing from one worktree redirects hooks for the whole
+repository, and a worktree with no `.harness/hooks` of its own then runs no
+hooks at all. Install from the main checkout, or install in every worktree.
 
 ## Testing shell scripts
 
@@ -258,7 +306,6 @@ installed.
 
 ## Planned modules
 
-- Git hook dispatch that preserves a project's existing hooks
 - Typed Codex and Claude CLI adapter contract
 - Runtime enforcement of the shipped agent tool policies
 - Atomic `tasks.yaml` state and resumable handoffs

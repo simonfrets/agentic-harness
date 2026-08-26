@@ -215,12 +215,14 @@ export { writeFileAtomic } from "./install/atomic-write.js";
 export {
   INSTALL_MANIFEST_VERSION,
   hashManagedFile,
+  hookRecordSchema,
   installManifestSchema,
   managedFileEntrySchema,
   readInstallManifest,
   writeInstallManifest,
 } from "./install/install-manifest.js";
 export type {
+  HookRecord,
   InstallManifest,
   ManagedFileEntry,
 } from "./install/install-manifest.js";
@@ -250,6 +252,26 @@ export type {
   InstallHarnessOptions,
   InstallHarnessResult,
 } from "./install/install-harness.js";
+export {
+  discoverHookEnvironment,
+  toProjectPath,
+} from "./install/discover-hooks.js";
+export type {
+  DiscoverHookEnvironmentOptions,
+  HookEnvironment,
+  PriorHook,
+} from "./install/discover-hooks.js";
+export {
+  EXECUTABLE_MODE,
+  LAUNCHER_PATH,
+  buildHarnessLauncher,
+  buildHookDispatcher,
+  escapeForDoubleQuotes,
+  hookScriptPath,
+} from "./install/hook-scripts.js";
+export type { HookDispatcher } from "./install/hook-scripts.js";
+export { planHooks } from "./install/plan-hooks.js";
+export type { PlanHooksInput } from "./install/plan-hooks.js";
 export {
   DIAGNOSTIC_STATUSES,
   REQUIRED_NODE_VERSION,

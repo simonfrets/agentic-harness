@@ -15,6 +15,17 @@ export const managedFileEntrySchema = z.strictObject({
   sha256: z.string().regex(/^[0-9a-f]{64}$/),
 });
 
+/** What the manifest remembers about one hook the harness took over. */
+export const hookRecordSchema = z.strictObject({
+  hook: z.string().min(1),
+  /**
+   * The preserved hook this dispatcher runs first, or null when the project
+   * had none. Relative to the project root when it lives inside it, so the
+   * record means the same thing on every machine that checks the project out.
+   */
+  chained: z.string().min(1).nullable(),
+});
+
 /**
  * The record of what the harness installed and what it looked like.
  *
@@ -28,9 +39,18 @@ export const installManifestSchema = z.strictObject({
   installedAt: z.string().min(1),
   updatedAt: z.string().min(1),
   managedFiles: z.array(managedFileEntrySchema),
+  /**
+   * Once `core.hooksPath` points at the harness, the dispatchers are the only
+   * hooks git can see. These two fields are therefore the only surviving
+   * record of what the project had before, and a re-install reads them rather
+   * than inspecting its own output and concluding there was never anything.
+   */
+  hooks: z.array(hookRecordSchema).default([]),
+  previousHooksPath: z.string().min(1).nullable().default(null),
 });
 
 export type ManagedFileEntry = z.output<typeof managedFileEntrySchema>;
+export type HookRecord = z.output<typeof hookRecordSchema>;
 export type InstallManifest = z.output<typeof installManifestSchema>;
 
 /**

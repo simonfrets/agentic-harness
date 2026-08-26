@@ -1,6 +1,9 @@
 import { join } from "node:path";
 
-import { HARNESS_DIRECTORY } from "../harness/layout.js";
+import {
+  HARNESS_DIRECTORY,
+  HARNESS_GIT_HOOKS_PATH,
+} from "../harness/layout.js";
 import type { InstallHarnessResult } from "../install/install-harness.js";
 
 const plural = (count: number, noun: string): string =>
@@ -37,6 +40,27 @@ export const formatInstallResult = (result: InstallHarnessResult): string => {
       ...result.orphaned.map((path) => `  ? ${path}`),
       "Delete them yourself once you are sure the project no longer needs them."
     );
+  }
+
+  if (result.hooks.length > 0) {
+    lines.push(
+      "",
+      `${
+        result.gitHooksPathChanged ? "git now dispatches" : "git dispatches"
+      } ${plural(result.hooks.length, "hook")} through ${HARNESS_GIT_HOOKS_PATH}`,
+      ...result.hooks.map(
+        (hook) =>
+          `  ${hook.hook}${
+            hook.chained === null ? "" : ` runs ${hook.chained} first`
+          }`
+      )
+    );
+
+    if (result.previousHooksPath !== null) {
+      lines.push(
+        `The project's own \`core.hooksPath\` was \`${result.previousHooksPath}\`; it is recorded in ${HARNESS_DIRECTORY}/version.json.`
+      );
+    }
   }
 
   lines.push(

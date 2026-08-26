@@ -32,6 +32,7 @@ describe("HarnessError", () => {
   it("declares every kind the CLI has to map to an exit code", () => {
     expect([...HARNESS_ERROR_KINDS]).toEqual([
       "dependency-install-failed",
+      "git-config-failed",
       "invalid-config",
       "not-a-git-repository",
       "not-installed",

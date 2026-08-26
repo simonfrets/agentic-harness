@@ -90,12 +90,31 @@ const install = async (options: {
   readonly now?: Date;
   readonly npm?: PlannedCommandResult;
   readonly git?: PlannedCommandResult;
+  readonly hooksPath?: string;
+  readonly gitConfigWrite?: PlannedCommandResult;
 }): Promise<Installation> => {
-  const runner = createFakeCommandRunner((request) =>
-    request.command.executable === "git"
-      ? (options.git ?? exited(0, { stdout: `${options.root}\n` }))
-      : (options.npm ?? exited(0))
-  );
+  const runner = createFakeCommandRunner((request) => {
+    const { executable, args } = request.command;
+
+    if (executable !== "git") {
+      return options.npm ?? exited(0);
+    }
+
+    if (args[1] === "--show-toplevel") {
+      return options.git ?? exited(0, { stdout: `${options.root}\n` });
+    }
+
+    if (args[1] === "--git-common-dir") {
+      return exited(0, { stdout: ".git\n" });
+    }
+
+    // `config --local --get` reads; `config --local <key> <value>` writes.
+    return args[2] === "--get"
+      ? options.hooksPath === undefined
+        ? exited(1)
+        : exited(0, { stdout: `${options.hooksPath}\n` })
+      : (options.gitConfigWrite ?? exited(0));
+  });
 
   const result = await installHarness({
     cwd: options.root,
@@ -121,12 +140,17 @@ describe("installHarness against the real shipped package", () => {
     const root = buildHostProject();
     const { result } = await install({ root, packageRoot });
 
-    expect(result.created).toEqual([
-      ...listHarnessTemplateFiles(packageRoot).map(
-        (file) => file.installedPath
-      ),
-      "package.json",
-    ]);
+    expect(result.created).toEqual(
+      [
+        ...listHarnessTemplateFiles(packageRoot).map(
+          (file) => file.installedPath
+        ),
+        "package.json",
+        "bin/harness",
+        "hooks/pre-commit",
+        "hooks/pre-push",
+      ].sort()
+    );
     expect(result.replaced).toEqual([]);
     expect(result.kept).toEqual([]);
     expect(result.orphaned).toEqual([]);
@@ -171,7 +195,24 @@ describe("installHarness", () => {
   const TEMPLATES = {
     "rules/base.yaml": "version: 1\nid: harness-base\n",
     "config/project.yaml": "version: 1\n",
+    "config/hooks.yaml": [
+      "version: 1",
+      "hooks:",
+      "  - hook: pre-commit",
+      "    phase: pre-commit",
+      "",
+    ].join("\n"),
   } as const;
+
+  /** Everything a synthetic install writes, in the order it reports them. */
+  const ALL_FILES = [
+    "bin/harness",
+    "config/hooks.yaml",
+    "config/project.yaml",
+    "hooks/pre-commit",
+    "package.json",
+    "rules/base.yaml",
+  ];
 
   it("resolves the project root from git rather than from the cwd", async () => {
     const root = buildHostProject();
@@ -245,7 +286,9 @@ describe("installHarness", () => {
     );
 
     expect(error.kind).toBe("dependency-install-failed");
-    expect(readInstallManifest(root)?.managedFiles).toHaveLength(3);
+    expect(readInstallManifest(root)?.managedFiles).toHaveLength(
+      ALL_FILES.length
+    );
     expect(read(root, "rules/base.yaml")).toBe(TEMPLATES["rules/base.yaml"]);
   });
 
@@ -260,7 +303,7 @@ describe("installHarness", () => {
     expect(result.dependenciesInstalled).toBe(false);
     expect(
       runner.requests.map((request) => request.command.executable)
-    ).toEqual(["git"]);
+    ).not.toContain("npm");
   });
 
   it("is idempotent: a second run keeps every file", async () => {
@@ -272,11 +315,7 @@ describe("installHarness", () => {
 
     expect(result.created).toEqual([]);
     expect(result.replaced).toEqual([]);
-    expect(result.kept).toEqual([
-      "config/project.yaml",
-      "rules/base.yaml",
-      "package.json",
-    ]);
+    expect(result.kept).toEqual(ALL_FILES);
   });
 
   it("refuses to replace an out-of-date managed file without --update", async () => {
@@ -316,7 +355,7 @@ describe("installHarness", () => {
       ),
     });
 
-    expect(result.replaced).toEqual(["rules/base.yaml", "package.json"]);
+    expect(result.replaced).toEqual(["package.json", "rules/base.yaml"]);
     expect(read(root, "rules/base.yaml")).toBe("version: 1\nid: renamed\n");
   });
 
@@ -373,6 +412,77 @@ describe("installHarness", () => {
       installedAt: NOW.toISOString(),
       updatedAt: LATER.toISOString(),
     });
+  });
+
+  it("refuses a build of itself that ships no hooks configuration", async () => {
+    const error = await captureRejection(
+      () =>
+        install({
+          root: buildHostProject(),
+          packageRoot: buildPackage({ "rules/base.yaml": "version: 1\n" }),
+        }),
+      HarnessError
+    );
+
+    expect(error.kind).toBe("invalid-config");
+    expect(error.message).toContain("config/hooks.yaml");
+  });
+
+  it("reports a core.hooksPath it could not write rather than assuming it took", async () => {
+    const root = buildHostProject();
+    const error = await captureRejection(
+      () =>
+        install({
+          root,
+          packageRoot: buildPackage(TEMPLATES),
+          gitConfigWrite: exited(1, {
+            stderr: "error: could not lock config\n",
+          }),
+        }),
+      HarnessError
+    );
+
+    expect(error.kind).toBe("git-config-failed");
+    expect(error.message).toContain("git still runs its own hooks");
+    expect(error.details).toEqual(["error: could not lock config"]);
+    // The dispatchers are on disk, so re-running repairs the setting alone.
+    expect(read(root, "hooks/pre-commit")).toContain("gate pre-commit");
+  });
+
+  it("reports a silent git failure without inventing detail", async () => {
+    const error = await captureRejection(
+      () =>
+        install({
+          root: buildHostProject(),
+          packageRoot: buildPackage(TEMPLATES),
+          gitConfigWrite: exited(1),
+        }),
+      HarnessError
+    );
+
+    expect(error.details).toEqual([]);
+  });
+
+  it("writes no launcher for a project that manages no hook", async () => {
+    const root = buildHostProject();
+    const { result, runner } = await install({
+      root,
+      packageRoot: buildPackage({
+        ...TEMPLATES,
+        "config/hooks.yaml": "version: 1\nhooks: []\n",
+      }),
+    });
+
+    expect(result.hooks).toEqual([]);
+    expect(result.gitHooksPathChanged).toBe(false);
+    expect(result.created).not.toContain("bin/harness");
+    expect(existsSync(join(root, ".harness", "bin"))).toBe(false);
+    // git keeps running its own hooks, so its configuration is left alone.
+    expect(
+      runner.requests.filter(
+        (request) => request.command.args[2] === "core.hooksPath"
+      )
+    ).toEqual([]);
   });
 
   it("records the hash of every managed file, including the generated manifest", async () => {
