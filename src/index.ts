@@ -23,6 +23,7 @@ export {
 } from "./harness/harness-error.js";
 export type { HarnessErrorKind } from "./harness/harness-error.js";
 export { readPackageVersion } from "./harness/package-version.js";
+export { readTextFileIfPresent } from "./harness/read-text-file.js";
 export { resolveProjectRoot } from "./harness/resolve-project-root.js";
 export type { ResolveProjectRootOptions } from "./harness/resolve-project-root.js";
 export { loadHarnessRuleSet } from "./harness/load-harness-rule-set.js";
@@ -206,7 +207,9 @@ export type {
 } from "./gates/run-phase-gates.js";
 
 export {
+  SEEDED_TEMPLATE_PATHS,
   harnessTemplateRoot,
+  isSeededTemplate,
   listHarnessTemplateFiles,
   readHarnessTemplateFile,
 } from "./install/harness-templates.js";
@@ -214,10 +217,12 @@ export type { HarnessTemplateFile } from "./install/harness-templates.js";
 export { writeFileAtomic } from "./install/atomic-write.js";
 export {
   INSTALL_MANIFEST_VERSION,
+  MANAGED_FILE_KINDS,
   hashManagedFile,
   hookRecordSchema,
   installManifestSchema,
   managedFileEntrySchema,
+  managedFileKindSchema,
   readInstallManifest,
   writeInstallManifest,
 } from "./install/install-manifest.js";
@@ -225,6 +230,7 @@ export type {
   HookRecord,
   InstallManifest,
   ManagedFileEntry,
+  ManagedFileKind,
 } from "./install/install-manifest.js";
 export {
   INSTALL_ACTIONS,

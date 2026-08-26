@@ -1,6 +1,7 @@
 import { chmodSync } from "node:fs";
 
 import { loadHooksConfig } from "../config/hooks-config.js";
+import type { HooksConfig } from "../config/hooks-config.js";
 import { HarnessError } from "../harness/harness-error.js";
 import {
   HARNESS_DIRECTORY,
@@ -9,6 +10,7 @@ import {
   harnessPath,
 } from "../harness/layout.js";
 import { readPackageVersion } from "../harness/package-version.js";
+import { readTextFileIfPresent } from "../harness/read-text-file.js";
 import { resolveProjectRoot } from "../harness/resolve-project-root.js";
 import { describeCommandResult } from "../processes/command-runner.js";
 import type { CommandRunner } from "../processes/command-runner.js";
@@ -33,7 +35,7 @@ import {
 } from "./install-manifest.js";
 import type { HookRecord, ManagedFileEntry } from "./install-manifest.js";
 import { planHooks } from "./plan-hooks.js";
-import { planInstallation } from "./plan-installation.js";
+import { planInstallation, toPlannedFileSource } from "./plan-installation.js";
 import type {
   InstallationPlan,
   PlannedFileSource,
@@ -85,7 +87,18 @@ export interface InstallHarnessResult {
 const collect = (plan: InstallationPlan, action: string): readonly string[] =>
   plan.files.filter((file) => file.action === action).map((file) => file.path);
 
-const readHooksConfig = (desired: readonly PlannedFileSource[]) => {
+/**
+ * Reads the hook policy this install has to honour.
+ *
+ * The installed copy wins over the template. `config/hooks.yaml` is seeded, so
+ * a project that disabled a hook or set `onExistingHook: abort` owns that file
+ * — and an installer that read the template anyway would let the edit be
+ * accepted and then ignore it, which is worse than refusing it outright.
+ */
+const readHooksConfig = (
+  projectRoot: string,
+  desired: readonly PlannedFileSource[]
+): HooksConfig => {
   const source = `${HARNESS_DIRECTORY}/${HARNESS_PATHS.hooksConfig}`;
   const template = desired.find(
     (file) => file.path === HARNESS_PATHS.hooksConfig
@@ -98,7 +111,11 @@ const readHooksConfig = (desired: readonly PlannedFileSource[]) => {
     );
   }
 
-  return loadHooksConfig(template.contents, { source });
+  const installed = readTextFileIfPresent(
+    harnessPath(projectRoot, HARNESS_PATHS.hooksConfig)
+  );
+
+  return loadHooksConfig(installed ?? template.contents, { source });
 };
 
 const setGitHooksPath = async (
@@ -148,13 +165,16 @@ export const installHarness = async (
   const templates = listHarnessTemplateFiles(options.packageRootDirectory);
 
   const managedContent: readonly PlannedFileSource[] = [
-    ...templates.map((file) => ({
-      path: file.installedPath,
-      contents: readHarnessTemplateFile(options.packageRootDirectory, file),
-    })),
+    ...templates.map((file) =>
+      toPlannedFileSource(
+        file,
+        readHarnessTemplateFile(options.packageRootDirectory, file.templatePath)
+      )
+    ),
     {
       path: HARNESS_PATHS.packageManifest,
       contents: buildRuntimePackageManifest(harnessVersion),
+      kind: "managed",
     },
   ];
 
@@ -164,7 +184,7 @@ export const installHarness = async (
     runner: options.runner,
   });
   const dispatchers = planHooks({
-    hooks: readHooksConfig(managedContent),
+    hooks: readHooksConfig(projectRoot, managedContent),
     environment,
     recorded: previous?.hooks ?? [],
   });
@@ -173,10 +193,17 @@ export const installHarness = async (
     ...managedContent,
     ...(dispatchers.length === 0
       ? []
-      : [{ path: LAUNCHER_PATH, contents: buildHarnessLauncher() }]),
+      : [
+          {
+            path: LAUNCHER_PATH,
+            contents: buildHarnessLauncher(),
+            kind: "managed" as const,
+          },
+        ]),
     ...dispatchers.map((dispatcher) => ({
       path: hookScriptPath(dispatcher.hook),
       contents: buildHookDispatcher(dispatcher),
+      kind: "managed" as const,
     })),
   ].sort((a, b) => compareCodeUnits(a.path, b.path));
 
@@ -205,6 +232,7 @@ export const installHarness = async (
   const managedFiles: ManagedFileEntry[] = plan.files.map((file) => ({
     path: file.path,
     sha256: file.sha256,
+    kind: file.kind,
   }));
   const hooks: HookRecord[] = dispatchers.map((dispatcher) => ({
     hook: dispatcher.hook,

@@ -25,7 +25,7 @@ const SHIPPED = "shipped\n";
 const RULE = "rules/base.yaml";
 
 const desiredRule = (contents = SHIPPED): readonly PlannedFileSource[] => [
-  { path: RULE, contents },
+  { path: RULE, contents, kind: "managed" },
 ];
 
 /** A manifest recording the content the harness believes it wrote. */
@@ -39,6 +39,7 @@ const manifestOf = (
   managedFiles: Object.entries(recorded).map(([path, contents]) => ({
     path,
     sha256: hashManagedFile(contents),
+    kind: "managed" as const,
   })),
   hooks: [],
   previousHooksPath: null,
@@ -165,9 +166,9 @@ describe("planInstallation", () => {
         },
       }),
       desired: [
-        { path: "rules/base.yaml", contents: SHIPPED },
-        { path: "rules/git.yaml", contents: SHIPPED },
-        { path: "config/project.yaml", contents: SHIPPED },
+        { path: "rules/base.yaml", contents: SHIPPED, kind: "managed" },
+        { path: "rules/git.yaml", contents: SHIPPED, kind: "managed" },
+        { path: "config/project.yaml", contents: SHIPPED, kind: "managed" },
       ],
       manifest: null,
       update: false,
@@ -183,8 +184,8 @@ describe("planInstallation", () => {
         files: { ".harness/rules/git.yaml": SHIPPED },
       }),
       desired: [
-        { path: "rules/base.yaml", contents: SHIPPED },
-        { path: "rules/git.yaml", contents: SHIPPED },
+        { path: "rules/base.yaml", contents: SHIPPED, kind: "managed" },
+        { path: "rules/git.yaml", contents: SHIPPED, kind: "managed" },
       ],
       manifest: null,
       update: false,
@@ -233,14 +234,109 @@ describe("planInstallation", () => {
   });
 });
 
+describe("planInstallation on a seeded file", () => {
+  const CONFIG = "config/project.yaml";
+  const seeded = (contents = SHIPPED): readonly PlannedFileSource[] => [
+    { path: CONFIG, contents, kind: "seeded" },
+  ];
+
+  it("writes it when the project does not have it yet", () => {
+    const plan = planInstallation({
+      projectRoot: buildHarnessProject(),
+      desired: seeded(),
+      manifest: null,
+      update: false,
+    });
+
+    expect(actionsOf(plan)).toEqual([`create ${CONFIG}`]);
+  });
+
+  it("leaves a copy the project edited alone instead of refusing", () => {
+    // This file exists to be edited. Reconciling it against the template is
+    // what made editing it the thing that broke the next `harness init`.
+    const plan = planInstallation({
+      projectRoot: buildHarnessProject({
+        files: { [`.harness/${CONFIG}`]: "validationMode: native-only\n" },
+      }),
+      desired: seeded(),
+      manifest: manifestOf({ [CONFIG]: SHIPPED }),
+      update: false,
+    });
+
+    expect(actionsOf(plan)).toEqual([`keep ${CONFIG}`]);
+  });
+
+  it("does not replace it even when --update is given", () => {
+    const plan = planInstallation({
+      projectRoot: buildHarnessProject({
+        files: { [`.harness/${CONFIG}`]: "validationMode: native-only\n" },
+      }),
+      desired: seeded(),
+      manifest: manifestOf({ [CONFIG]: SHIPPED }),
+      update: true,
+    });
+
+    expect(actionsOf(plan)).toEqual([`keep ${CONFIG}`]);
+  });
+
+  it("accepts one the harness never installed, because the project owns it", () => {
+    const plan = planInstallation({
+      projectRoot: buildHarnessProject({
+        files: { [`.harness/${CONFIG}`]: "written by hand\n" },
+      }),
+      desired: seeded(),
+      manifest: null,
+      update: false,
+    });
+
+    expect(actionsOf(plan)).toEqual([`keep ${CONFIG}`]);
+  });
+
+  it("records the hash of the project's copy, not of the template", () => {
+    const local = "validationMode: native-only\n";
+    const plan = planInstallation({
+      projectRoot: buildHarnessProject({
+        files: { [`.harness/${CONFIG}`]: local },
+      }),
+      desired: seeded(),
+      manifest: null,
+      update: false,
+    });
+
+    expect(plan.files[0]?.sha256).toBe(hashManagedFile(local));
+    expect(plan.files[0]?.kind).toBe("seeded");
+  });
+});
+
 describe("toPlannedFileSource", () => {
   it("keys the planned content by the installed path, not the template path", () => {
     expect(
       toPlannedFileSource(
-        { templatePath: "gitignore", installedPath: ".gitignore" },
+        {
+          templatePath: "gitignore",
+          installedPath: ".gitignore",
+          seeded: false,
+        },
         "node_modules/\n"
       )
-    ).toEqual({ path: ".gitignore", contents: "node_modules/\n" });
+    ).toEqual({
+      path: ".gitignore",
+      contents: "node_modules/\n",
+      kind: "managed",
+    });
+  });
+
+  it("carries a seeded template through as a file the project will own", () => {
+    expect(
+      toPlannedFileSource(
+        {
+          templatePath: "config/project.yaml",
+          installedPath: "config/project.yaml",
+          seeded: true,
+        },
+        "version: 1\n"
+      ).kind
+    ).toBe("seeded");
   });
 });
 

@@ -1,8 +1,10 @@
 import { join } from "node:path";
 
+import { HarnessError } from "../../../src/harness/harness-error.js";
 import { discoverProjectProfile } from "../../../src/project/discover-project-profile.js";
 import { PackageManagerAmbiguityError } from "../../../src/project/package-manager.js";
 import { buildProject } from "../../fixtures/projects/build-project.js";
+import { captureRejection } from "../../helpers/expect-error.js";
 import {
   at,
   createFakeCommandRunner,
@@ -245,5 +247,91 @@ describe("discoverProjectProfile", () => {
 
     expect(runner.requests).toHaveLength(1);
     expect(at(runner.requests, 0).command.executable).toBe("git");
+  });
+});
+
+describe("discoverProjectProfile and the installed harness config", () => {
+  const withConfig = (contents: string, files = {}): string =>
+    buildProject({
+      manifest: { name: "example" },
+      files: { ".harness/config/project.yaml": contents, ...files },
+    });
+
+  it("takes the validation mode from the project's own config", async () => {
+    const profile = await discoverProjectProfile({
+      root: withConfig("version: 1\nvalidationMode: native-only\n"),
+      runner: hooksPathUnset().run,
+    });
+
+    expect(profile.validationMode).toBe("native-only");
+  });
+
+  it("falls back to the documented default when nothing is installed", async () => {
+    const profile = await discoverProjectProfile({
+      root: buildProject({ manifest: { name: "example" } }),
+      runner: hooksPathUnset().run,
+    });
+
+    expect(profile.validationMode).toBe("native-plus-harness");
+    expect(profile.packageManager).toBe("npm");
+  });
+
+  it("lets a pinned package manager settle disagreeing lockfiles", async () => {
+    // Without the pin these two lockfiles are the ambiguity the field exists
+    // to resolve.
+    const root = withConfig("version: 1\npackageManager: pnpm\n", {
+      "package-lock.json": "{}\n",
+      "pnpm-lock.yaml": "lockfileVersion: 9\n",
+    });
+
+    const profile = await discoverProjectProfile({
+      root,
+      runner: hooksPathUnset().run,
+    });
+
+    expect(profile.packageManager).toBe("pnpm");
+  });
+
+  it("still raises the ambiguity when nothing pins it", async () => {
+    const root = withConfig("version: 1\n", {
+      "package-lock.json": "{}\n",
+      "pnpm-lock.yaml": "lockfileVersion: 9\n",
+    });
+
+    await expect(
+      discoverProjectProfile({ root, runner: hooksPathUnset().run })
+    ).rejects.toBeInstanceOf(PackageManagerAmbiguityError);
+  });
+
+  it("prefers the harness pin over the host manifest's own field", async () => {
+    const root = buildProject({
+      manifest: { name: "example", packageManager: "yarn@4.1.0" },
+      files: {
+        ".harness/config/project.yaml": "version: 1\npackageManager: pnpm\n",
+      },
+    });
+
+    const profile = await discoverProjectProfile({
+      root,
+      runner: hooksPathUnset().run,
+    });
+
+    expect(profile.packageManager).toBe("pnpm");
+  });
+
+  it("reports a config it cannot read rather than silently defaulting", async () => {
+    // A project that set the mode and mistyped it must not quietly get the
+    // opposite of what it asked for.
+    const error = await captureRejection(
+      () =>
+        discoverProjectProfile({
+          root: withConfig("version: 1\nvalidationMode: native-onlyy\n"),
+          runner: hooksPathUnset().run,
+        }),
+      HarnessError
+    );
+
+    expect(error.kind).toBe("invalid-config");
+    expect(error.message).toContain("config/project.yaml");
   });
 });

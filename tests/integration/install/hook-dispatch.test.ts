@@ -346,23 +346,61 @@ describe("hook dispatch over an existing hook", () => {
     expect(second.created).toEqual([]);
   });
 
-  it("refuses when the project asked it not to take hooks over", async () => {
+  it("refuses when the project asked it not to take hooks over", () => {
     const root = buildRepository();
 
     write(root, ".git/hooks/pre-commit", recordingHook("project"), 0o755);
-    await install(root);
+    write(
+      root,
+      ".harness/config/hooks.yaml",
+      "version: 1\nonExistingHook: abort\nhooks: []\n"
+    );
 
-    // Re-point the config at the original hooks and forbid chaining, which is
-    // the state a project reaches by editing config/hooks.yaml before install.
-    git(root, ["config", "--local", "--unset", "core.hooksPath"]);
+    return expect(install(root)).rejects.toMatchObject({
+      kind: "unsafe-hook-chain",
+    });
+  });
+
+  it("honours a hooks config the project edited after installing", async () => {
+    // config/hooks.yaml is seeded, so the project owns it. Reading the shipped
+    // template here would accept the edit and then ignore it.
+    const root = buildRepository();
+
+    await install(root);
     writeFileSync(
       join(root, ".harness", "config", "hooks.yaml"),
-      "version: 1\nonExistingHook: abort\nhooks: []\n"
+      [
+        "version: 1",
+        "hooks:",
+        "  - hook: pre-commit",
+        "    enabled: false",
+        "    phase: pre-commit",
+        "  - hook: pre-push",
+        "    enabled: true",
+        "    phase: pre-push",
+        "",
+      ].join("\n")
+    );
+
+    const result = await install(root);
+
+    expect(result.hooks.map((hook) => hook.hook)).toEqual(["pre-push"]);
+    expect(result.orphaned).toEqual(["hooks/pre-commit"]);
+  });
+
+  it("reports a hooks config the project broke, rather than falling back", async () => {
+    const root = buildRepository();
+
+    await install(root);
+    writeFileSync(
+      join(root, ".harness", "config", "hooks.yaml"),
+      "version: 1\nhooks: not-a-list\n"
     );
 
     const error = await captureRejection(() => install(root), HarnessError);
 
-    expect(error.kind).toBe("unsafe-overwrite");
+    expect(error.kind).toBe("invalid-config");
+    expect(error.message).toContain("config/hooks.yaml");
   });
 });
 
