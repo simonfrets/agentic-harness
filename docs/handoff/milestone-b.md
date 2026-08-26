@@ -14,7 +14,7 @@ code.
 
 ## Where things stand
 
-- Worktree: `/Users/sinancoskun/Projects/agentic-harness-codex-basic-structure`
+- Worktree: `<PROJECTS>/agentic-harness-codex-basic-structure`
 - Branch: `codex/basic-structure`
 - HEAD: `fa4ec48 Enforce rule checks at workflow gates`
 - Working tree clean. Nothing pushed; no remote exists.
@@ -181,7 +181,7 @@ Update `README.md` only for behaviour that actually exists.
 ## Starting prompt
 
 > Continue Agentic Harness on branch `codex/basic-structure` in the worktree
-> `/Users/sinancoskun/Projects/agentic-harness-codex-basic-structure`. Read
+> `<PROJECTS>/agentic-harness-codex-basic-structure`. Read
 > `AGENTS.md`, `README.md`, `docs/handoff/rule-enforcement.md`, and
 > `docs/handoff/milestone-b.md` completely before writing code. Milestone A is
 > done and committed at 100% coverage. Implement Milestone B only — B1 through

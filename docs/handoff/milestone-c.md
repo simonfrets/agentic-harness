@@ -10,7 +10,7 @@ complete and this document supersedes them.
 
 ## Where things stand
 
-- Worktree: `/Users/sinancoskun/Projects/agentic-harness-codex-basic-structure`
+- Worktree: `<PROJECTS>/agentic-harness-codex-basic-structure`
 - Branch: `codex/basic-structure`
 - HEAD: `343f64c Enforce the gates in CI, for this repo and for installed projects`
 - Working tree clean. Pushed to `origin`; open as pull request #2 against
@@ -263,7 +263,7 @@ Report any deviation directly. Do not describe partial work as complete.
 ## Starting prompt
 
 > Continue Agentic Harness on branch `codex/basic-structure` in the worktree
-> `/Users/sinancoskun/Projects/agentic-harness-codex-basic-structure`. Read
+> `<PROJECTS>/agentic-harness-codex-basic-structure`. Read
 > `AGENTS.md`, `README.md`, `docs/handoff/rule-enforcement.md` and
 > `docs/handoff/milestone-c.md` completely before writing code. Milestones A
 > and B are committed and verified. Implement C0 through C3 only, test-first,

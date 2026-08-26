@@ -16,7 +16,7 @@ B4 scope still stands.
 
 ## Where things stand
 
-- Worktree: `/Users/sinancoskun/Projects/agentic-harness-codex-basic-structure`
+- Worktree: `<PROJECTS>/agentic-harness-codex-basic-structure`
 - Branch: `codex/basic-structure`
 - HEAD: `2470a70 Ship agent definitions and harness configuration`
 - Nothing pushed; no remote for this branch.
@@ -231,7 +231,7 @@ Report any deviation directly. Do not describe partial work as complete.
 ## Starting prompt
 
 > Continue Agentic Harness on branch `codex/basic-structure` in the worktree
-> `/Users/sinancoskun/Projects/agentic-harness-codex-basic-structure`. Read
+> `<PROJECTS>/agentic-harness-codex-basic-structure`. Read
 > `AGENTS.md`, `README.md`, `docs/handoff/rule-enforcement.md`, and
 > `docs/handoff/milestone-b3.md` completely before writing code. Milestones A,
 > B1 and B2 are committed. The working tree carries uncommitted B3 work:
