@@ -239,10 +239,16 @@ There are two separate questions here, and they have different answers.
 
 `.github/workflows/ci.yml` runs `npm run check`, `npm run build`,
 `npm run test:coverage` and `npm pack --dry-run` on Linux and macOS — WSL runs
-the Linux build, so those two cover every shell target v1 claims. The Node
-version comes from `engines.node` rather than being written out again, so the
-version CI proves the project on cannot drift from the version the project says
-it needs.
+the Linux build, so those two cover every shell target v1 claims.
+
+The Node version is pinned rather than read from `engines.node`. That field is
+a _range_, and `setup-node` resolves a range to the newest version satisfying
+it, so reading it would have meant never once running the minimum the project
+promises. Linux runs both that minimum and current `22`; macOS runs the minimum
+only, because it bills at ten times Linux and the difference it exists to catch
+is the shell, not the Node version.
+`tests/integration/ci/workflow.test.ts` asserts the pinned literal still equals
+the floor in `engines.node`, which is what stops the two drifting.
 
 `.husky/pre-commit` runs the same gate locally, but a local hook is skippable
 with `git commit --no-verify`. The hook is the convenience; the workflow is the
@@ -267,6 +273,13 @@ It resolves the private tree from `.harness/package-lock.json` and then runs
 `harness gate pre-commit` and `harness gate pre-push`; both, because the two
 phases check different things — lint and type checking on one, the build on the
 other.
+
+Installing the _project's_ own dependencies is the one manager-specific step,
+and the template says so in place: replace `npm ci` if the project is on pnpm,
+Yarn or Bun. Caching is pointed at `.harness/package-lock.json` rather than the
+project root, because the private tree is always npm by design while the
+project may not be, and `cache: npm` against a `package-lock.json` that does not
+exist fails the step outright.
 
 Leaving it there as documentation would make it advice, which this project does
 not treat as enforcement, so `harness doctor` reports it: a project whose

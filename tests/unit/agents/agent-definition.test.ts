@@ -105,6 +105,25 @@ describe("loadAgentDefinition", () => {
     );
   });
 
+  it("rejects the capability to execute without a script allowance", () => {
+    // The mirror of the case above, and the one that was missing: permission
+    // to run commands with nothing it is permitted to run. README claimed the
+    // two directions were symmetric; only one of them was checked.
+    const error = captureError(
+      () =>
+        load(
+          definition(
+            "tools:\n  read: true\n  search: true\n  edit: false\n  execute: true\n"
+          )
+        ),
+      HarnessError
+    );
+
+    expect(error.details.join("\n")).toContain(
+      "must declare at least one project script"
+    );
+  });
+
   it("rejects an arbitrary command dressed up as a project script", () => {
     const error = captureError(
       () => load(EDITING.replace("  - test", "  - 'rm -rf /'")),

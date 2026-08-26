@@ -54,6 +54,38 @@ export const ENVIRONMENT_ALLOWLIST = [
   "TMPDIR",
 ] as const;
 
+/**
+ * Signals a child's whole process group, falling back to the child alone.
+ *
+ * A negative pid means "the process group", which is why the child is spawned
+ * `detached`. Two cases must not reach that call. An absent pid would become
+ * `process.kill(-0)`, and nought is not a group - it means *the caller's own*
+ * group, so a spawn that never started would signal the harness and everything
+ * running alongside it. And a group that has already exited raises ESRCH
+ * rather than returning quietly, which inside a timer callback is an unhandled
+ * throw.
+ *
+ * Both fall back to signalling the child directly, which is a no-op on a
+ * process that has already gone.
+ */
+export const killProcessTree = (
+  pid: number | undefined,
+  signal: NodeJS.Signals,
+  fallback: () => void
+): void => {
+  if (pid === undefined) {
+    fallback();
+
+    return;
+  }
+
+  try {
+    process.kill(-pid, signal);
+  } catch {
+    fallback();
+  }
+};
+
 export const buildChildEnvironment = (
   base: NodeJS.ProcessEnv,
   overrides: Readonly<Record<string, string>> | null
@@ -162,6 +194,11 @@ export const createNodeCommandRunner =
         env: buildChildEnvironment(options.baseEnv, request.env),
         shell: false,
         windowsHide: true,
+        // The child leads its own process group, so a timeout can signal the
+        // whole tree. `npm run test` is a shell wrapping the real test runner:
+        // signalling only the direct child reaped the wrapper and left the
+        // runner alive, still holding the repository the gate had given up on.
+        detached: true,
         // stdin is /dev/null so a command that prompts fails fast instead of
         // hanging until the timeout.
         stdio: ["ignore", "pipe", "pipe"],
@@ -178,12 +215,18 @@ export const createNodeCommandRunner =
       let forceKilled = false;
       let graceTimer: NodeJS.Timeout | undefined;
 
+      const killTree = (signal: NodeJS.Signals): void => {
+        killProcessTree(child.pid, signal, () => {
+          child.kill(signal);
+        });
+      };
+
       const killTimer = setTimeout(() => {
         timedOut = true;
-        child.kill(options.killSignal);
+        killTree(options.killSignal);
         graceTimer = setTimeout(() => {
           forceKilled = true;
-          child.kill("SIGKILL");
+          killTree("SIGKILL");
         }, options.killGraceMs);
         graceTimer.unref();
       }, request.timeoutMs);
