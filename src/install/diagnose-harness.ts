@@ -1,4 +1,4 @@
-import { readFileSync, statSync } from "node:fs";
+import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 import { loadHooksConfig } from "../config/hooks-config.js";
@@ -13,10 +13,26 @@ import {
 } from "../harness/layout.js";
 import { loadHarnessRuleSet } from "../harness/load-harness-rule-set.js";
 import { readPackageVersion } from "../harness/package-version.js";
+import { readTextFileIfPresent } from "../harness/read-text-file.js";
 import { describeCommandResult } from "../processes/command-runner.js";
 import type { CommandRunner } from "../processes/command-runner.js";
 import { readInstallManifest } from "./install-manifest.js";
 import { HARNESS_PACKAGE_NAME } from "./runtime-dependencies.js";
+
+/** Where a GitHub Actions workflow has to live to run at all. */
+export const WORKFLOW_DIRECTORY = join(".github", "workflows");
+
+/** Path of the workflow the harness ships for a project to copy out. */
+export const CI_TEMPLATE_PATH = "ci/github-actions.yml";
+
+/**
+ * What a workflow has to contain to count as running the gates.
+ *
+ * Matching the command rather than the launcher's path accepts every way a
+ * project might reach the CLI — the installed `bin/harness`, an `npx` call, or
+ * a script of its own that wraps it.
+ */
+const GATE_INVOCATION = "harness gate";
 
 const TOOL_TIMEOUT_MS = 10_000;
 
@@ -144,14 +160,6 @@ const diagnoseTool = async (
   return diagnostic(tool.id, tool.title, "ok", reported);
 };
 
-const readTextFile = (path: string): string | null => {
-  try {
-    return readFileSync(path, "utf8");
-  } catch {
-    return null;
-  }
-};
-
 const isExecutableFile = (path: string): boolean => {
   try {
     const stats = statSync(path);
@@ -216,7 +224,7 @@ const diagnoseConfig = (projectRoot: string): ConfigDiagnosis => {
   let hooks: HooksConfig | null = null;
 
   const projectSource = `${HARNESS_DIRECTORY}/${HARNESS_PATHS.projectConfig}`;
-  const projectText = readTextFile(
+  const projectText = readTextFileIfPresent(
     harnessPath(projectRoot, HARNESS_PATHS.projectConfig)
   );
 
@@ -231,7 +239,7 @@ const diagnoseConfig = (projectRoot: string): ConfigDiagnosis => {
   }
 
   const hooksSource = `${HARNESS_DIRECTORY}/${HARNESS_PATHS.hooksConfig}`;
-  const hooksText = readTextFile(
+  const hooksText = readTextFileIfPresent(
     harnessPath(projectRoot, HARNESS_PATHS.hooksConfig)
   );
 
@@ -278,8 +286,9 @@ const diagnoseRuntime = (projectRoot: string): Diagnostic => {
   const title = "Runtime dependencies";
 
   if (
-    readTextFile(harnessPath(projectRoot, HARNESS_PATHS.packageManifest)) ===
-    null
+    readTextFileIfPresent(
+      harnessPath(projectRoot, HARNESS_PATHS.packageManifest)
+    ) === null
   ) {
     return diagnostic(
       "runtime",
@@ -295,7 +304,7 @@ const diagnoseRuntime = (projectRoot: string): Diagnostic => {
     HARNESS_PACKAGE_NAME
   );
 
-  if (readTextFile(join(installed, "package.json")) === null) {
+  if (readTextFileIfPresent(join(installed, "package.json")) === null) {
     return diagnostic(
       "runtime",
       title,
@@ -371,6 +380,51 @@ const diagnoseHooks = (
       );
 };
 
+/**
+ * Reports whether the gates also run somewhere a developer cannot skip them.
+ *
+ * A git hook is bypassable with `git commit --no-verify`, so the hooks the
+ * installer writes are a convenience; only CI is an enforcement. Nothing here
+ * can install a workflow — `.github/` is outside the boundary the harness
+ * keeps to — so the hole is reported instead.
+ *
+ * It is a warning rather than a problem because a project may enforce the same
+ * gates somewhere this check cannot see, on GitLab, Jenkins or a server-side
+ * hook. Saying "no GitHub workflow runs them" is the honest claim; "you have no
+ * CI" is not one this check is in a position to make.
+ */
+const diagnoseContinuousIntegration = (projectRoot: string): Diagnostic => {
+  const title = "Continuous integration";
+  const directory = join(projectRoot, WORKFLOW_DIRECTORY);
+  let names: readonly string[];
+
+  try {
+    names = readdirSync(directory);
+  } catch {
+    names = [];
+  }
+
+  const running = names.filter((name) => {
+    const contents = readTextFileIfPresent(join(directory, name));
+
+    return contents?.includes(GATE_INVOCATION) ?? false;
+  });
+
+  return running.length === 0
+    ? diagnostic(
+        "ci",
+        title,
+        "warning",
+        `no workflow in ${WORKFLOW_DIRECTORY} runs the harness gates, so a commit made with \`--no-verify\` is checked by nothing; copy ${HARNESS_DIRECTORY}/${CI_TEMPLATE_PATH} there`
+      )
+    : diagnostic(
+        "ci",
+        title,
+        "ok",
+        `${running.join(", ")} runs the harness gates`
+      );
+};
+
 const readGitHooksPath = async (
   projectRoot: string,
   runner: CommandRunner
@@ -423,6 +477,7 @@ export const diagnoseHarness = async (
     diagnoseRules(projectRoot),
     diagnoseRuntime(projectRoot),
     diagnoseHooks(projectRoot, config.hooks, gitHooksPath),
+    diagnoseContinuousIntegration(projectRoot),
   ];
 
   const problemCount = diagnostics.filter(

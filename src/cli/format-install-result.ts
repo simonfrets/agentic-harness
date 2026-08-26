@@ -4,6 +4,7 @@ import {
   HARNESS_DIRECTORY,
   HARNESS_GIT_HOOKS_PATH,
 } from "../harness/layout.js";
+import { CI_TEMPLATE_PATH } from "../install/diagnose-harness.js";
 import type { InstallHarnessResult } from "../install/install-harness.js";
 
 const plural = (count: number, noun: string): string =>
@@ -55,6 +56,15 @@ export const formatInstallResult = (result: InstallHarnessResult): string => {
           }`
       )
     );
+
+    // Said once, when the hooks are first taken over. A hook is skippable
+    // with `--no-verify`, so leaving this to `harness doctor` would mean the
+    // one person who installed the harness never hears it.
+    if (result.gitHooksPathChanged) {
+      lines.push(
+        `A hook can be skipped with \`--no-verify\`. Copy ${HARNESS_DIRECTORY}/${CI_TEMPLATE_PATH} into .github/workflows/ so CI runs the same gates.`
+      );
+    }
 
     if (result.previousHooksPath !== null) {
       lines.push(

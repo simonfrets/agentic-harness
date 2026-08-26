@@ -105,12 +105,11 @@ const runHook = (
       cwd: root,
       encoding: "utf8",
       input: options.stdin ?? "",
-      env: {
-        ...process.env,
-        ...(options.exitCode === undefined
+      env: cleanEnvironment(
+        options.exitCode === undefined
           ? {}
-          : { HARNESS_FAKE_EXIT: options.exitCode }),
-      },
+          : { HARNESS_FAKE_EXIT: options.exitCode }
+      ),
     }
   );
 
@@ -164,10 +163,8 @@ describe("hook dispatch with no prior hook", () => {
     fakeRuntime(root);
     git(root, ["add", "."]);
 
-    const blocked = spawnSync("git", ["commit", "-m", "blocked"], {
-      cwd: root,
-      encoding: "utf8",
-      env: cleanEnvironment({ HARNESS_FAKE_EXIT: "4" }),
+    const blocked = git(root, ["commit", "-m", "blocked"], {
+      HARNESS_FAKE_EXIT: "4",
     });
 
     expect(blocked.status).not.toBe(0);
@@ -175,10 +172,8 @@ describe("hook dispatch with no prior hook", () => {
       "harness gate pre-commit"
     );
 
-    const allowed = spawnSync("git", ["commit", "-m", "allowed"], {
-      cwd: root,
-      encoding: "utf8",
-      env: cleanEnvironment({ HARNESS_FAKE_EXIT: "0" }),
+    const allowed = git(root, ["commit", "-m", "allowed"], {
+      HARNESS_FAKE_EXIT: "0",
     });
 
     expect(allowed.status).toBe(0);

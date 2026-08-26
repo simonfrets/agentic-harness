@@ -2,8 +2,10 @@ import { chmodSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import {
+  CI_TEMPLATE_PATH,
   REQUIRED_NODE_VERSION,
   REQUIRED_TOOLS,
+  WORKFLOW_DIRECTORY,
   diagnoseHarness,
   versionOrder,
 } from "../../../src/install/diagnose-harness.js";
@@ -138,7 +140,19 @@ const find = (diagnosis: HarnessDiagnosis, id: string): Diagnostic => {
   return found;
 };
 
-const healthyRoot = (): string => buildInstalled();
+const WORKFLOW = [
+  "name: Harness gates",
+  "jobs:",
+  "  gates:",
+  "    steps:",
+  "      - run: ./.harness/bin/harness gate pre-commit",
+  "",
+].join("\n");
+
+const healthyRoot = (): string =>
+  buildInstalled({
+    files: { ".github/workflows/harness.yml": WORKFLOW },
+  });
 
 describe("versionOrder", () => {
   it("orders dotted versions", () => {
@@ -188,6 +202,7 @@ describe("diagnoseHarness on a healthy installation", () => {
       "rules",
       "runtime",
       "hooks",
+      "ci",
     ]);
   });
 
@@ -490,5 +505,74 @@ describe("REQUIRED_NODE_VERSION", () => {
         : null;
 
     expect(engines).toMatchObject({ node: `>=${REQUIRED_NODE_VERSION}` });
+  });
+});
+
+describe("diagnoseHarness on continuous integration", () => {
+  it("warns when nothing runs the gates where they cannot be skipped", async () => {
+    // A git hook is bypassable with `--no-verify`, so hooks alone are a
+    // convenience. This is the check that says so out loud.
+    const diagnosis = await diagnose(buildInstalled(), {
+      hooksPath: ".harness/hooks",
+    });
+
+    expect(find(diagnosis, "ci")).toMatchObject({ status: "warning" });
+    expect(find(diagnosis, "ci").detail).toContain("--no-verify");
+    expect(find(diagnosis, "ci").detail).toContain(CI_TEMPLATE_PATH);
+    expect(diagnosis.healthy).toBe(true);
+  });
+
+  it("names the workflow that runs them", async () => {
+    const diagnosis = await diagnose(healthyRoot());
+
+    expect(find(diagnosis, "ci")).toMatchObject({
+      status: "ok",
+      detail: "harness.yml runs the harness gates",
+    });
+  });
+
+  it("accepts any way of reaching the CLI, not only the installed launcher", async () => {
+    const diagnosis = await diagnose(
+      buildInstalled({
+        files: {
+          ".github/workflows/gates.yml":
+            "      - run: npx harness gate pre-push\n",
+        },
+      })
+    );
+
+    expect(find(diagnosis, "ci").status).toBe("ok");
+  });
+
+  it("ignores a workflow that does not run them", async () => {
+    const diagnosis = await diagnose(
+      buildInstalled({
+        files: {
+          ".github/workflows/release.yml": "      - run: npm publish\n",
+        },
+      })
+    );
+
+    expect(find(diagnosis, "ci").status).toBe("warning");
+  });
+
+  it("steps over an entry it cannot read, such as a directory", async () => {
+    const diagnosis = await diagnose(
+      buildInstalled({
+        files: {
+          ".github/workflows/nested/notes.md": "not a workflow\n",
+          ".github/workflows/harness.yml": WORKFLOW,
+        },
+      })
+    );
+
+    expect(find(diagnosis, "ci")).toMatchObject({
+      status: "ok",
+      detail: "harness.yml runs the harness gates",
+    });
+  });
+
+  it("looks where GitHub actually requires a workflow to be", () => {
+    expect(WORKFLOW_DIRECTORY).toBe(join(".github", "workflows"));
   });
 });

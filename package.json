@@ -2,6 +2,7 @@
   "name": "agentic-harness",
   "version": "0.1.0",
   "description": "A local, project-scoped harness for orchestrating coding agents through CLI adapters.",
+  "author": "Sinan Coskun",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -15,9 +16,10 @@
     "harness": "./dist/cli/index.js"
   },
   "files": [
+    "LICENSE",
+    "README.md",
     "dist",
-    "templates",
-    "README.md"
+    "templates"
   ],
   "engines": {
     "node": ">=22.22.1",
