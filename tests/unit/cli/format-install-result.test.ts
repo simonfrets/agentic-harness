@@ -10,6 +10,7 @@ const RESULT: InstallHarnessResult = {
   replaced: [],
   kept: [],
   orphaned: [],
+  removed: [],
   dependenciesInstalled: true,
   hooks: [],
   previousHooksPath: null,
@@ -50,6 +51,18 @@ describe("formatInstallResult", () => {
     expect(text).toContain("1 managed file this version no longer ships");
     expect(text).toContain("  ? rules/retired.yaml");
     expect(text).toContain("Delete them yourself");
+  });
+
+  it("reports a hook dispatcher it deleted and says why", () => {
+    const text = format({ removed: ["hooks/pre-commit"] });
+
+    expect(text).toContain("1 hook dispatcher removed");
+    expect(text).toContain("git would otherwise still run them");
+    expect(text).toContain("  - hooks/pre-commit");
+  });
+
+  it("says nothing about removals when there are none", () => {
+    expect(format()).not.toContain("removed, because");
   });
 
   it("says nothing about orphans when there are none", () => {
