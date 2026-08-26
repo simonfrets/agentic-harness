@@ -1,4 +1,4 @@
-> **Archived handoff.** B3 and B4 are complete as of `1dfff4f`. The current
+> **Archived handoff.** B3 and B4 are complete as of `3fcbb3e`. The current
 > state, the defects found while finishing them, and the Milestone C scope are
 > in `docs/handoff/milestone-c.md`.
 
@@ -18,7 +18,7 @@ B4 scope still stands.
 
 - Worktree: `/Users/sinancoskun/Projects/agentic-harness-codex-basic-structure`
 - Branch: `codex/basic-structure`
-- HEAD: `8f4024f Ship agent definitions and harness configuration`
+- HEAD: `2470a70 Ship agent definitions and harness configuration`
 - Nothing pushed; no remote for this branch.
 - **The working tree is dirty and does not pass `npm run test:coverage`.** Five
   untracked modules under `src/install/` and two untracked test files are
@@ -32,9 +32,9 @@ modules have no tests yet. This is expected, not a defect to hunt.
 
 | Commit    | Subject                                                           |
 | --------- | ----------------------------------------------------------------- |
-| `0c77047` | Add command line entry point (B1)                                 |
-| `6c61297` | Ship .harness configuration templates (B2)                        |
-| `8f4024f` | Ship agent definitions and harness configuration (B2, completion) |
+| `72256b4` | Add command line entry point (B1)                                 |
+| `6cee335` | Ship .harness configuration templates (B2)                        |
+| `2470a70` | Ship agent definitions and harness configuration (B2, completion) |
 
 B1 and B2 are complete. 319 tests pass across 38 suites.
 
@@ -58,7 +58,7 @@ The original `milestone-b.md` treated B2 as three rule bundles plus a
 `.gitignore`. Its first bullet — "matching the target layout" — was not met:
 the layout in the A–D handoff also has `agents/` and `config/` directories.
 
-`8f4024f` closes that. It ships six agent definitions and two config files,
+`2470a70` closes that. It ships six agent definitions and two config files,
 each with a Zod schema and Jest validation, and adds `src/config/`:
 
 | Module                           | Public surface                                                   |
@@ -194,7 +194,7 @@ rest were found the hard way in this session.
 12. **`.husky/pre-commit` runs the full gate on every commit**, against the
     working tree rather than the index. A commit that stages only part of a
     dirty tree is therefore _not_ verified by the hook. To verify a commit on
-    its own, move the unrelated files aside first — this is how `8f4024f` was
+    its own, move the unrelated files aside first — this is how `2470a70` was
     made green while B3 work sat uncommitted.
 13. **This is a Git worktree and the stash stack is shared.** Never use bare
     `git stash` / `git stash pop`. Prefer a temporary WIP commit, or move files
