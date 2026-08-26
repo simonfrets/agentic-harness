@@ -2,14 +2,17 @@ import { chmodSync, unlinkSync } from "node:fs";
 
 import { loadHooksConfig } from "../config/hooks-config.js";
 import type { HooksConfig } from "../config/hooks-config.js";
-import { HarnessError } from "../harness/harness-error.js";
+import { HarnessError, describeFailure } from "../harness/harness-error.js";
 import {
   HARNESS_DIRECTORY,
   HARNESS_GIT_HOOKS_PATH,
   HARNESS_PATHS,
   harnessPath,
 } from "../harness/layout.js";
-import { readPackageVersion } from "../harness/package-version.js";
+import {
+  readPackageRepository,
+  readPackageVersion,
+} from "../harness/package-version.js";
 import { readTextFileIfPresent } from "../harness/read-text-file.js";
 import { resolveProjectRoot } from "../harness/resolve-project-root.js";
 import { describeCommandResult } from "../processes/command-runner.js";
@@ -140,6 +143,8 @@ export interface InstallHarnessResult {
   /** Hook dispatchers deleted because git would otherwise still run them. */
   readonly removed: readonly string[];
   readonly dependenciesInstalled: boolean;
+  /** Why the private tree could not be resolved, or null when it could. */
+  readonly dependencyFailure: string | null;
   /** The hooks git now dispatches, and what each of them preserved. */
   readonly hooks: readonly HookRecord[];
   /** `core.hooksPath` as it was before this install, or null when unset. */
@@ -239,7 +244,10 @@ export const installHarness = async (
     ),
     {
       path: HARNESS_PATHS.packageManifest,
-      contents: buildRuntimePackageManifest(harnessVersion),
+      contents: buildRuntimePackageManifest({
+        harnessVersion,
+        repository: readPackageRepository(options.packageRootDirectory),
+      }),
       kind: "managed",
     },
   ];
@@ -322,20 +330,35 @@ export const installHarness = async (
     previousHooksPath,
   });
 
+  const installDependencies = options.installDependencies ?? true;
+  let dependencyFailure: string | null = null;
+
+  if (installDependencies) {
+    try {
+      await installRuntimeDependencies({
+        projectRoot,
+        runner: options.runner,
+      });
+    } catch (error: unknown) {
+      // Recorded rather than thrown, so the caller can still report what was
+      // installed. Throwing here discarded the whole summary - which hooks
+      // were taken over, what they chained - and left a npm error as the only
+      // thing a person saw.
+      dependencyFailure = describeFailure(error);
+    }
+  }
+
+  // Hooks are pointed at the harness only once the thing they invoke exists.
+  // Redirecting core.hooksPath first meant a failed dependency install left a
+  // repository that could not commit at all: every hook ran a launcher with no
+  // runtime behind it, and re-running `init` failed at the same step.
   const gitHooksPathChanged =
-    dispatchers.length > 0 && environment.hooksPath !== HARNESS_GIT_HOOKS_PATH;
+    dependencyFailure === null &&
+    dispatchers.length > 0 &&
+    environment.hooksPath !== HARNESS_GIT_HOOKS_PATH;
 
   if (gitHooksPathChanged) {
     await setGitHooksPath(projectRoot, options.runner);
-  }
-
-  const installDependencies = options.installDependencies ?? true;
-
-  if (installDependencies) {
-    await installRuntimeDependencies({
-      projectRoot,
-      runner: options.runner,
-    });
   }
 
   return {
@@ -346,7 +369,8 @@ export const installHarness = async (
     kept: collect(plan, "keep"),
     orphaned: stale.retained,
     removed: stale.removed,
-    dependenciesInstalled: installDependencies,
+    dependenciesInstalled: installDependencies && dependencyFailure === null,
+    dependencyFailure,
     hooks,
     previousHooksPath,
     previousHooksPathScope,

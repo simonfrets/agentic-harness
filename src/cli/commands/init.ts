@@ -21,5 +21,8 @@ export const initHarness: CliCommandHandler = async (context) => {
 
   context.streams.stdout.write(formatInstallResult(result));
 
-  return CLI_EXIT_CODES.ok;
+  // The summary is printed either way; the exit code is what a script reads.
+  return result.dependencyFailure === null
+    ? CLI_EXIT_CODES.ok
+    : CLI_EXIT_CODES.refused;
 };

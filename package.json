@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "description": "A local, project-scoped harness for orchestrating coding agents through CLI adapters.",
   "author": "Sinan Coskun",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/simonfrets/agentic-harness.git"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

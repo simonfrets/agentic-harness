@@ -44,7 +44,18 @@ const buildPackage = (
 
   writeFileSync(
     join(root, "package.json"),
-    `${JSON.stringify({ name: "agentic-harness", version }, null, 2)}\n`
+    `${JSON.stringify(
+      {
+        name: "agentic-harness",
+        version,
+        repository: {
+          type: "git",
+          url: "git+https://github.com/an-owner/a-repo.git",
+        },
+      },
+      null,
+      2
+    )}\n`
   );
 
   for (const [path, contents] of Object.entries(templates)) {
@@ -268,28 +279,66 @@ describe("installHarness", () => {
 
     expect(result.dependenciesInstalled).toBe(true);
     expect(at(npm, 0).cwd).toBe(join(root, ".harness"));
-    expect(read(root, "package.json")).toContain('"agentic-harness": "2.0.0"');
+    expect(read(root, "package.json")).toContain(
+      "https://github.com/an-owner/a-repo/releases/download/v2.0.0/agentic-harness-2.0.0.tgz"
+    );
   });
 
   it("writes the files and the manifest before resolving dependencies", async () => {
     // An install interrupted by a failing `npm install` must leave a project
     // the harness still recognises as its own, so re-running repairs it.
     const root = buildHostProject();
-    const error = await captureRejection(
-      () =>
-        install({
-          root,
-          packageRoot: buildPackage(TEMPLATES),
-          npm: exited(1, { stderr: "npm error code E404\n" }),
-        }),
-      HarnessError
-    );
+    const { result } = await install({
+      root,
+      packageRoot: buildPackage(TEMPLATES),
+      npm: exited(1, { stderr: "npm error code E404\n" }),
+    });
 
-    expect(error.kind).toBe("dependency-install-failed");
+    expect(result.dependencyFailure).toContain("E404");
+    expect(result.dependenciesInstalled).toBe(false);
     expect(readInstallManifest(root)?.managedFiles).toHaveLength(
       ALL_FILES.length
     );
     expect(read(root, "rules/base.yaml")).toBe(TEMPLATES["rules/base.yaml"]);
+  });
+
+  it("leaves git hooks alone when the runtime never resolved", async () => {
+    // Redirecting core.hooksPath first left a repository that could not commit
+    // at all: every hook ran a launcher with no runtime behind it, and
+    // re-running `init` failed at the same step.
+    const root = buildHostProject();
+    const { result, runner } = await install({
+      root,
+      packageRoot: buildPackage(TEMPLATES),
+      npm: exited(1, { stderr: "npm error code E404\n" }),
+    });
+
+    expect(result.gitHooksPathChanged).toBe(false);
+    expect(
+      runner.requests.filter(
+        (request) =>
+          request.command.args[0] === "config" &&
+          request.command.args[1] === "--local" &&
+          request.command.args[2] === "core.hooksPath"
+      )
+    ).toEqual([]);
+  });
+
+  it("resolves the runtime before it points git at the harness", async () => {
+    const root = buildHostProject();
+    const { runner } = await install({
+      root,
+      packageRoot: buildPackage(TEMPLATES),
+    });
+    const order = runner.requests.map((request) =>
+      request.command.executable === "npm"
+        ? "npm"
+        : request.command.args.slice(0, 3).join(" ")
+    );
+
+    expect(order.indexOf("npm")).toBeLessThan(
+      order.indexOf("config --local core.hooksPath")
+    );
   });
 
   it("skips the dependency install when asked to write files only", async () => {

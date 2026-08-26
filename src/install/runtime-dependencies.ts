@@ -24,13 +24,36 @@ export const RUNTIME_INSTALL_ARGV = [
 ] as const;
 
 /**
+ * The GitHub release asset a project installs the harness from.
+ *
+ * The harness is deliberately not published to npm, so the dependency is the
+ * tarball `npm pack` produces, attached to the release for its version. npm
+ * installs a remote tarball without cloning or building anything, which a
+ * `github:owner/repo` dependency would have to do - and this package's `dist/`
+ * is not committed, so there would be nothing there to install.
+ */
+export const harnessReleaseTarballUrl = (
+  repository: string,
+  harnessVersion: string
+): string =>
+  `https://github.com/${repository}/releases/download/v${harnessVersion}/${HARNESS_PACKAGE_NAME}-${harnessVersion}.tgz`;
+
+export interface RuntimePackageManifestInput {
+  readonly harnessVersion: string;
+  /** `owner/name` of the repository the release lives in. */
+  readonly repository: string;
+}
+
+/**
  * The private manifest that gives `.harness` its own dependency tree.
  *
- * It is `private` so it can never be published by accident, and it pins the
- * running harness version exactly, so an installed project keeps working the
- * same way until someone runs `harness init --update`.
+ * It is `private` so it can never be published by accident, and it pins one
+ * exact release asset, so an installed project keeps working the same way
+ * until someone runs `harness init --update`.
  */
-export const buildRuntimePackageManifest = (harnessVersion: string): string =>
+export const buildRuntimePackageManifest = (
+  input: RuntimePackageManifestInput
+): string =>
   `${JSON.stringify(
     {
       name: RUNTIME_PACKAGE_NAME,
@@ -38,7 +61,12 @@ export const buildRuntimePackageManifest = (harnessVersion: string): string =>
       private: true,
       description:
         "Private dependency tree for the agentic harness installed in this project.",
-      dependencies: { [HARNESS_PACKAGE_NAME]: harnessVersion },
+      dependencies: {
+        [HARNESS_PACKAGE_NAME]: harnessReleaseTarballUrl(
+          input.repository,
+          input.harnessVersion
+        ),
+      },
     },
     null,
     2
