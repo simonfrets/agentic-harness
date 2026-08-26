@@ -1,4 +1,4 @@
-> **Archived handoff.** Milestone B is complete as of `1dfff4f`. See
+> **Archived handoff.** Milestone B is complete as of `3fcbb3e`. See
 > `docs/handoff/milestone-c.md` for the current state.
 
 ---
@@ -16,7 +16,7 @@ code.
 
 - Worktree: `/Users/sinancoskun/Projects/agentic-harness-codex-basic-structure`
 - Branch: `codex/basic-structure`
-- HEAD: `9a36931 Enforce rule checks at workflow gates`
+- HEAD: `fa4ec48 Enforce rule checks at workflow gates`
 - Working tree clean. Nothing pushed; no remote exists.
 - `main` (`41c815a`) is an unrelated root commit in the other worktree. Do not
   implement there.

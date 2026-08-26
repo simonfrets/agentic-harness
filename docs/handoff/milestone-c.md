@@ -12,21 +12,23 @@ complete and this document supersedes them.
 
 - Worktree: `/Users/sinancoskun/Projects/agentic-harness-codex-basic-structure`
 - Branch: `codex/basic-structure`
-- HEAD: `4e643bb Separate seeded configuration from managed files`
-- Working tree clean. Nothing pushed; no remote for this branch.
+- HEAD: `343f64c Enforce the gates in CI, for this repo and for installed projects`
+- Working tree clean. Pushed to `origin`; open as pull request #2 against
+  `main`, which was an empty root commit until this branch was rebased onto it.
 
 `npm run check`, `npm run build`, `npm run test:coverage` and
-`npm pack --dry-run` all pass: 503 tests across 50 suites at 99.17% statements
+`npm pack --dry-run` all pass: 520 tests across 51 suites at 99.18% statements
 against thresholds of 90/90/90/80. `src/install` and `src/project` are at 100%
-on every metric.
+on every metric. The same gate runs in GitHub Actions on Linux and macOS, which
+is the enforcement; `.husky/pre-commit` is the convenience.
 
 ### Committed since the last handoff
 
 | Commit    | Subject                                              |
 | --------- | ---------------------------------------------------- |
-| `c1805a7` | Record the Milestone B3 handoff                      |
-| `d1aae42` | Install the harness into a project idempotently (B3) |
-| `1dfff4f` | Dispatch Git hooks without discarding existing ones  |
+| `ebe67c9` | Record the Milestone B3 handoff                      |
+| `1c0b179` | Install the harness into a project idempotently (B3) |
+| `3fcbb3e` | Dispatch Git hooks without discarding existing ones  |
 
 Milestone B is complete. `README.md` documents the installer, the doctor and
 hook dispatch, and documents only behaviour that exists.
@@ -88,14 +90,14 @@ Read these before planning Milestone C. None is hidden by a passing test.
    demonstration above unpacked `npm pack`'s tarball into
    `.harness/node_modules/` by hand to get past it.
 
-2. **A project cannot edit `config/project.yaml` or `config/hooks.yaml` and
-   then re-run `harness init`.** Both are shipped templates, so B3's decision
-   table classifies an edited copy as "locally modified" and refuses —
-   `--update` included, exit 5. These two files exist to be edited, so this is
-   a real defect rather than a safety property. Fixing it means giving the
-   manifest a notion of a _seeded_ file, written once and never reconciled
-   again, distinct from a _managed_ file kept in step with the template. Do
-   that before Milestone C stores task state next to them.
+2. ~~A project cannot edit `config/project.yaml` or `config/hooks.yaml` and
+   then re-run `harness init`.~~ **Fixed in C0.** Installed files now carry a
+   kind. A `seeded` file is written once and never reconciled; ownership is a
+   property of the shipped file rather than of the manifest entry, so an
+   installation made by an earlier version is reclassified rather than
+   migrated. `installHarness` reads the _installed_ `config/hooks.yaml` rather
+   than the template, because accepting an edit and then ignoring it would be
+   worse than refusing it.
 
 3. **Installing from one linked worktree redirects hooks for the whole
    repository.** `core.hooksPath` is repository-local configuration that Git
@@ -118,6 +120,26 @@ Read these before planning Milestone C. None is hidden by a passing test.
 5. **`config/models.yaml` and `config/providers.yaml` remain deferred to
    Milestone D**, which validates provider flags against a real CLI `--help`.
 
+6. ~~There is no CI, so every gate is skippable with `--no-verify`.~~ **Fixed**,
+   in two separate places, because they are two separate problems.
+
+   For this repository, `.github/workflows/ci.yml` runs the full completion
+   gate on Linux and macOS, taking its Node version from `engines.node` so the
+   two cannot drift. `tests/integration/ci/workflow.test.ts` asserts its exact
+   command list and that no step can pass while failing.
+
+   For an installed project the harness cannot place the workflow itself: a
+   GitHub Actions file has to live in `.github/workflows/`, outside the
+   `.harness/` boundary that design decision 1 forbids crossing. It therefore
+   ships one at `.harness/ci/github-actions.yml`, `harness init` says once that
+   it needs copying, and `harness doctor` reports its absence as a warning. If
+   a future session wants installation to place it directly, that is a second
+   documented exception to decision 1 and should be argued for as one, not
+   slipped in.
+
+7. ~~`package.json` declares MIT with no `LICENSE` file.~~ **Fixed.** MIT
+   `LICENSE`, `author`, and `LICENSE` in the published `files`.
+
 ## Traps this repository will spring on you
 
 The first five are carried forward and still bite. The sixth cost this session
@@ -131,7 +153,7 @@ a corrupted branch.
 2. **A type-only module reports 0% coverage.** Declare types beside the values
    they describe.
 3. **`src/index.ts` barrel re-exports count as functions.**
-   `tests/unit/index.test.ts` holds an explicit `PUBLIC_API` list — now 138
+   `tests/unit/index.test.ts` holds an explicit `PUBLIC_API` list — now 140
    entries — that must be updated whenever an export is added.
 4. **Never weaken a gate.** `AGENTS.md` forbids it. No lowered threshold, no
    ignore comment, no `--no-verify`.
@@ -141,7 +163,7 @@ a corrupted branch.
 6. **A test that spawns `git` must scrub `GIT_*` from the environment first.**
    Git exports `GIT_DIR`, `GIT_WORK_TREE` and `GIT_INDEX_FILE` to the hooks it
    runs, and `.husky/pre-commit` runs the whole suite. The first attempt at
-   `1dfff4f` therefore ran its fixtures against _this_ repository: it rewrote
+   `3fcbb3e` therefore ran its fixtures against _this_ repository: it rewrote
    the branch HEAD to a one-file commit, created a stray `feature` branch and
    registered a worktree pointing into `/tmp`. Recovery was
    `git reset --mixed`, `git worktree prune`, `git branch -D`. Use
@@ -165,7 +187,16 @@ a corrupted branch.
     behaviour through argument-vector unit tests.
 12. **`.husky/pre-commit` runs the full gate against the working tree**, not
     the index. To verify a commit on its own, move unrelated files aside first.
-13. **This is a Git worktree and the stash stack is shared.** Never use bare
+    It is also skippable with `--no-verify`; `.github/workflows/ci.yml` is what
+    actually enforces the gate, and
+    `tests/integration/ci/workflow.test.ts` asserts its exact command list so a
+    step cannot be dropped from it quietly.
+13. **A test that spawns git must never write an identity with `git config`.**
+    `tests/helpers/git.ts` passes `-c user.name` / `-c user.email` per
+    invocation instead. A fixture that wrote them with `git config` put them in
+    _this_ repository's `.git/config`, where they went on to author four real
+    commits as "Harness Test" before anyone noticed.
+14. **This is a Git worktree and the stash stack is shared.** Never use bare
     `git stash` / `git stash pop`. Prefer a temporary WIP commit.
 
 ## Milestone C scope
