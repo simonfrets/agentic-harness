@@ -19,9 +19,22 @@ export interface PriorHook {
   readonly path: string;
 }
 
+/**
+ * Where an effective `core.hooksPath` was configured.
+ *
+ * `local` is the repository's own. `inherited` means it came from the user's
+ * global or the system config, so it governs this repository but is not part
+ * of it, and the hooks it names will not exist for anyone else who checks the
+ * project out.
+ */
+export const HOOKS_PATH_SCOPES = ["local", "inherited"] as const;
+export type HooksPathScope = (typeof HOOKS_PATH_SCOPES)[number];
+
 export interface HookEnvironment {
-  /** `core.hooksPath` exactly as git reports it, or null when unset. */
+  /** The effective `core.hooksPath`, from any config scope, or null. */
   readonly hooksPath: string | null;
+  /** Which config the effective value came from. Null when it is unset. */
+  readonly hooksPathScope: HooksPathScope | null;
   /** Absolute directory git was running hooks from before this install. */
   readonly hooksDirectory: string;
   /** True when git already dispatches through this project's harness. */
@@ -101,11 +114,21 @@ export const discoverHookEnvironment = async (
   options: DiscoverHookEnvironmentOptions
 ): Promise<HookEnvironment> => {
   const { projectRoot } = options;
+  // The *effective* value, from whichever config scope set it. Asking only
+  // `--local` reported "no hooks configured" for a repository whose hooks were
+  // running perfectly well from the user's global config, and the installer
+  // then redirected core.hooksPath and switched them off without a word.
   const configured = await gitOutput(
-    ["config", "--local", "--get", "core.hooksPath"],
+    ["config", "--get", "core.hooksPath"],
     options
   );
   const hooksPath = configured === "" ? null : configured;
+  const local = await gitOutput(
+    ["config", "--local", "--get", "core.hooksPath"],
+    options
+  );
+  const hooksPathScope: HooksPathScope | null =
+    hooksPath === null ? null : local === "" ? "inherited" : "local";
 
   let hooksDirectory: string;
 
@@ -132,6 +155,7 @@ export const discoverHookEnvironment = async (
 
   return {
     hooksPath,
+    hooksPathScope,
     hooksDirectory,
     dispatchedByHarness,
     priorHooks: dispatchedByHarness

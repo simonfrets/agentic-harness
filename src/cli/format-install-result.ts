@@ -79,7 +79,9 @@ export const formatInstallResult = (result: InstallHarnessResult): string => {
 
     if (result.previousHooksPath !== null) {
       lines.push(
-        `The project's own \`core.hooksPath\` was \`${result.previousHooksPath}\`; it is recorded in ${HARNESS_DIRECTORY}/version.json.`
+        result.previousHooksPathScope === "inherited"
+          ? `\`core.hooksPath\` was \`${result.previousHooksPath}\`, set outside this repository in your global or system git config. Its hooks were chained, but they are not part of the project, so they will not exist for anyone else who checks it out.`
+          : `The project's own \`core.hooksPath\` was \`${result.previousHooksPath}\`; it is recorded in ${HARNESS_DIRECTORY}/version.json.`
       );
     }
   }

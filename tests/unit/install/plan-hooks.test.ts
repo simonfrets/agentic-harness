@@ -34,6 +34,7 @@ const environment = (
   dispatchedByHarness = false
 ): HookEnvironment => ({
   hooksPath: dispatchedByHarness ? ".harness/hooks" : null,
+  hooksPathScope: dispatchedByHarness ? "local" : null,
   hooksDirectory: "/tmp/host/.git/hooks",
   dispatchedByHarness,
   priorHooks,
