@@ -12,6 +12,9 @@ import {
   harnessPath,
 } from "../harness/layout.js";
 import { loadHarnessRuleSet } from "../harness/load-harness-rule-set.js";
+import { discoverProjectProfile } from "../project/discover-project-profile.js";
+import type { ProjectProfile } from "../project/project-profile-schema.js";
+import type { ResolvedRuleSet } from "../rules/resolve-rule-set.js";
 import { readPackageVersion } from "../harness/package-version.js";
 import { readTextFileIfPresent } from "../harness/read-text-file.js";
 import { describeCommandResult } from "../processes/command-runner.js";
@@ -268,19 +271,98 @@ const diagnoseConfig = (projectRoot: string): ConfigDiagnosis => {
   };
 };
 
-const diagnoseRules = (projectRoot: string): Diagnostic => {
+interface RulesDiagnosis {
+  readonly diagnostic: Diagnostic;
+  /** Null when the rules could not be resolved at all. */
+  readonly ruleSet: ResolvedRuleSet | null;
+}
+
+const diagnoseRules = (projectRoot: string): RulesDiagnosis => {
   try {
     const ruleSet = loadHarnessRuleSet({ projectRoot });
 
-    return diagnostic(
-      "rules",
-      "Rules",
-      "ok",
-      `${String(ruleSet.rules.length)} rule(s) resolved, sha256 ${ruleSet.sha256}`
-    );
+    return {
+      ruleSet,
+      diagnostic: diagnostic(
+        "rules",
+        "Rules",
+        "ok",
+        `${String(ruleSet.rules.length)} rule(s) resolved, sha256 ${ruleSet.sha256}`
+      ),
+    };
   } catch (error: unknown) {
-    return diagnostic("rules", "Rules", "problem", describeFailure(error));
+    return {
+      ruleSet: null,
+      diagnostic: diagnostic(
+        "rules",
+        "Rules",
+        "problem",
+        describeFailure(error)
+      ),
+    };
   }
+};
+
+/**
+ * Reports checks that name a project script the project does not have.
+ *
+ * A rule with `whenMissing: fail` is stating that the absence of the script is
+ * itself the defect, which is right for the project the rule was written for
+ * and wrong for one that never had it. Installing the shipped TypeScript
+ * bundle into a project with no `lint` script blocked every commit from then
+ * on, while `doctor` reported no problems at all: the gate that would fire was
+ * perfectly discoverable, and nothing looked.
+ */
+const diagnoseProjectScripts = (
+  ruleSet: ResolvedRuleSet | null,
+  profile: ProjectProfile | null
+): Diagnostic | null => {
+  const title = "Project scripts";
+
+  if (ruleSet === null || profile === null) {
+    return null;
+  }
+
+  const available = new Set<string>(profile.availableScripts);
+  const missing = ruleSet.rules.flatMap((rule) =>
+    rule.checks.flatMap((check) =>
+      check.runner === "project-script" &&
+      check.whenMissing === "fail" &&
+      !available.has(check.script)
+        ? [
+            {
+              detail: `${rule.id} / ${check.id} runs \`${check.script}\`,`,
+              blocking: check.required && rule.severity === "error",
+            },
+          ]
+        : []
+    )
+  );
+
+  if (missing.length === 0) {
+    return diagnostic(
+      "scripts",
+      title,
+      "ok",
+      `every check resolves a script this project defines`
+    );
+  }
+
+  const blocking = missing.filter((entry) => entry.blocking);
+
+  return diagnostic(
+    "scripts",
+    title,
+    blocking.length === 0 ? "warning" : "problem",
+    [
+      ...missing.map(
+        (entry) => `${entry.detail} which package.json does not define`
+      ),
+      blocking.length === 0
+        ? "None of them blocks a phase."
+        : `${String(blocking.length)} of them will block every commit until the script exists or the rule is overridden in ${HARNESS_DIRECTORY}/${HARNESS_PATHS.customRules}`,
+    ].join("\n")
+  );
 };
 
 const diagnoseRuntime = (projectRoot: string): Diagnostic => {
@@ -457,6 +539,24 @@ const diagnoseChainedHooks = (
       );
 };
 
+/**
+ * The project's profile, or null when it cannot be built.
+ *
+ * Discovery raises on a repository whose lockfiles disagree about the package
+ * manager. That is a real problem, but it is not this check's to report, and a
+ * diagnosis that crashed would take the other nine checks down with it.
+ */
+const readProjectProfile = async (
+  projectRoot: string,
+  runner: CommandRunner
+): Promise<ProjectProfile | null> => {
+  try {
+    return await discoverProjectProfile({ root: projectRoot, runner });
+  } catch {
+    return null;
+  }
+};
+
 /** Hooks the manifest recorded, or none when it cannot be read. */
 const readRecordedHooks = (projectRoot: string): readonly HookRecord[] => {
   try {
@@ -512,6 +612,9 @@ export const diagnoseHarness = async (
   }
 
   const config = diagnoseConfig(projectRoot);
+  const rules = diagnoseRules(projectRoot);
+  const profile = await readProjectProfile(projectRoot, runner);
+  const scripts = diagnoseProjectScripts(rules.ruleSet, profile);
   const gitHooksPath = await readGitHooksPath(projectRoot, runner);
   const chained = diagnoseChainedHooks(readRecordedHooks(projectRoot));
 
@@ -520,7 +623,8 @@ export const diagnoseHarness = async (
     ...tools,
     diagnoseInstallation(projectRoot, options.harnessVersion),
     config.diagnostic,
-    diagnoseRules(projectRoot),
+    rules.diagnostic,
+    ...(scripts === null ? [] : [scripts]),
     diagnoseRuntime(projectRoot),
     diagnoseHooks(projectRoot, config.hooks, gitHooksPath),
     // Only reported when there is something to report: a project with no

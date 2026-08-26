@@ -20,7 +20,10 @@ import {
   spawnFailed,
 } from "../../helpers/fake-command-runner.js";
 import type { PlannedCommandResult } from "../../helpers/fake-command-runner.js";
-import { ruleBundleYaml } from "../../helpers/rule-yaml.js";
+import {
+  projectScriptCheckYaml,
+  ruleBundleYaml,
+} from "../../helpers/rule-yaml.js";
 import { removeTempDirectories } from "../../helpers/temp-directory.js";
 
 afterEach(() => {
@@ -200,6 +203,7 @@ describe("diagnoseHarness on a healthy installation", () => {
       "installation",
       "config",
       "rules",
+      "scripts",
       "runtime",
       "hooks",
       "ci",
@@ -505,6 +509,79 @@ describe("REQUIRED_NODE_VERSION", () => {
         : null;
 
     expect(engines).toMatchObject({ node: `>=${REQUIRED_NODE_VERSION}` });
+  });
+});
+
+describe("diagnoseHarness on project scripts", () => {
+  const bundleNaming = (
+    script: string,
+    whenMissing = "fail",
+    required = true
+  ) =>
+    ruleBundleYaml({
+      bundleId: "harness-base",
+      ruleId: "base.tests",
+      checks: projectScriptCheckYaml({
+        checkId: "native-test",
+        script,
+        phases: ["pre-commit"],
+        required,
+        whenMissing: whenMissing as "fail" | "skip",
+      }),
+    });
+
+  const withScripts = (
+    scripts: Readonly<Record<string, string>>,
+    bundle = bundleNaming("test")
+  ): string =>
+    buildHarnessProject({
+      manifest: { name: "host", scripts },
+      files: { ...INSTALLED, ".harness/rules/base.yaml": bundle },
+    });
+
+  it("reports a required check whose script the project does not define", async () => {
+    const diagnosis = await diagnose(withScripts({ lint: "eslint ." }));
+
+    expect(find(diagnosis, "scripts").status).toBe("problem");
+    expect(find(diagnosis, "scripts").detail).toContain("`test`");
+    expect(find(diagnosis, "scripts").detail).toContain("block every commit");
+    expect(diagnosis.healthy).toBe(false);
+  });
+
+  it("accepts a project that defines every script its rules name", async () => {
+    const diagnosis = await diagnose(withScripts({ test: "jest" }));
+
+    expect(find(diagnosis, "scripts")).toMatchObject({ status: "ok" });
+  });
+
+  it("says nothing about a check that is allowed to skip", async () => {
+    const diagnosis = await diagnose(
+      withScripts({}, bundleNaming("test", "skip"))
+    );
+
+    expect(find(diagnosis, "scripts").status).toBe("ok");
+  });
+
+  it("warns rather than fails when the check could not block anyway", async () => {
+    const diagnosis = await diagnose(
+      withScripts({}, bundleNaming("test", "fail", false))
+    );
+
+    expect(find(diagnosis, "scripts")).toMatchObject({ status: "warning" });
+    expect(find(diagnosis, "scripts").detail).toContain("None of them blocks");
+    expect(diagnosis.healthy).toBe(true);
+  });
+
+  it("stays silent when the rules could not be resolved at all", async () => {
+    const diagnosis = await diagnose(
+      buildInstalled({
+        files: { ".harness/rules/base.yaml": "version: 1\nid: 9bad\n" },
+      })
+    );
+
+    expect(diagnosis.diagnostics.map((entry) => entry.id)).not.toContain(
+      "scripts"
+    );
   });
 });
 

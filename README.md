@@ -41,16 +41,16 @@ script.
 
 ## Quality commands
 
-| Command                 | Purpose                                            |
-| ----------------------- | -------------------------------------------------- |
-| `npm run format:check`  | Verify formatting without modifying files          |
-| `npm run lint`          | Run type-aware ESLint with zero warnings allowed   |
-| `npm run typecheck`     | Run strict TypeScript checking                     |
-| `npm run lint:shell`    | Parse every tracked project shell script with Bash |
-| `npm test`              | Run Jest unit and shell-script tests               |
-| `npm run test:coverage` | Run Jest with enforced coverage thresholds         |
-| `npm run check`         | Run the complete local quality gate                |
-| `npm run build`         | Produce ESM JavaScript and declarations in `dist/` |
+| Command                 | Purpose                                                 |
+| ----------------------- | ------------------------------------------------------- |
+| `npm run format:check`  | Verify formatting without modifying files               |
+| `npm run lint`          | Run type-aware ESLint with zero warnings allowed        |
+| `npm run typecheck`     | Run strict TypeScript checking                          |
+| `npm run lint:shell`    | Parse every `*.sh` file with Bash, and report the count |
+| `npm test`              | Run Jest unit and shell-script tests                    |
+| `npm run test:coverage` | Run Jest with enforced coverage thresholds              |
+| `npm run check`         | Run the complete local quality gate                     |
+| `npm run build`         | Produce ESM JavaScript and declarations in `dist/`      |
 
 The pre-commit hook runs staged formatting and ESLint fixes, followed by the
 full lint, type-check, shell syntax, and Jest gates.
@@ -169,7 +169,15 @@ write, leaves hooks alone, and exits `5`.
 
 `harness doctor` checks Node, npm, Git, Bash, the installation manifest, the
 configuration files, the rule set, the private dependency tree, Git hook
-reachability, and whether anything runs the gates in CI. It writes nothing, runs every check even after one fails, and
+reachability, whether every check can resolve the project script it names, and
+whether anything runs the gates in CI.
+
+A project that installs a bundle naming a script it does not have is the case
+worth calling out: `whenMissing: fail` means the rule considers the absence to
+_be_ the defect, which is right for the project the rule was written for and
+wrong for one that never had that script. Left alone it blocks every commit,
+so `doctor` reports it as a problem and names the rule, the check and the
+script, along with where to override it. It writes nothing, runs every check even after one fails, and
 exits `3` if any check is a problem. Warnings — an installation made by a
 different harness version, or hooks that are not dispatched through the harness
 — are reported without failing.
