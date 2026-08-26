@@ -39,3 +39,13 @@ export class HarnessError extends Error {
     this.details = details;
   }
 }
+
+/**
+ * Renders any thrown value as one message.
+ *
+ * Shared rather than repeated at each `catch`, because a call site that
+ * narrowed to `Error` on its own would carry a branch for the non-error case
+ * that nothing there could reach, let alone test.
+ */
+export const describeFailure = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);

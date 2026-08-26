@@ -1,4 +1,4 @@
-import { HarnessError } from "../harness/harness-error.js";
+import { HarnessError, describeFailure } from "../harness/harness-error.js";
 import { readPackageVersion } from "../harness/package-version.js";
 import type { CommandRunner } from "../processes/command-runner.js";
 import {
@@ -32,6 +32,8 @@ export interface CliContext {
   readonly packageRootDirectory: string;
   readonly runner: CommandRunner;
   readonly now: () => Date;
+  /** The Node runtime executing the CLI, as `process.versions.node`. */
+  readonly nodeVersion: string;
 }
 
 export type CliCommandHandler = (context: CliContext) => Promise<number>;
@@ -52,6 +54,7 @@ export interface RunCliOptions {
   readonly packageRootDirectory: string;
   readonly runner: CommandRunner;
   readonly now: () => Date;
+  readonly nodeVersion: string;
   readonly commands: CliCommandRegistry;
 }
 
@@ -81,9 +84,6 @@ Exit codes:
   4 a required check failed and blocked the phase
   5 the action was unsafe and was not taken
 `;
-
-const describeFailure = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error);
 
 /**
  * Parses an argument vector, dispatches it, and turns any failure into an exit
@@ -137,6 +137,7 @@ export const runCli = async (options: RunCliOptions): Promise<number> => {
       packageRootDirectory: options.packageRootDirectory,
       runner: options.runner,
       now: options.now,
+      nodeVersion: options.nodeVersion,
     });
   } catch (error: unknown) {
     options.streams.stderr.write(`harness: ${describeFailure(error)}\n`);

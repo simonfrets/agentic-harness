@@ -51,6 +51,7 @@ const invoke = async (
     commands: {},
     cwd: "/tmp/project",
     now: () => new Date("2026-08-26T00:00:00.000Z"),
+    nodeVersion: "22.22.1",
     packageRootDirectory: packageRoot(),
     runner: createFakeCommandRunner(exited(0)).run,
     streams: recorded.streams,

@@ -12,10 +12,15 @@ export const harnessPackageMetadata = {
 
 export {
   HARNESS_DIRECTORY,
+  HARNESS_GIT_HOOKS_PATH,
   HARNESS_PATHS,
   harnessPath,
 } from "./harness/layout.js";
-export { HARNESS_ERROR_KINDS, HarnessError } from "./harness/harness-error.js";
+export {
+  HARNESS_ERROR_KINDS,
+  HarnessError,
+  describeFailure,
+} from "./harness/harness-error.js";
 export type { HarnessErrorKind } from "./harness/harness-error.js";
 export { readPackageVersion } from "./harness/package-version.js";
 export { resolveProjectRoot } from "./harness/resolve-project-root.js";
@@ -206,6 +211,58 @@ export {
   readHarnessTemplateFile,
 } from "./install/harness-templates.js";
 export type { HarnessTemplateFile } from "./install/harness-templates.js";
+export { writeFileAtomic } from "./install/atomic-write.js";
+export {
+  INSTALL_MANIFEST_VERSION,
+  hashManagedFile,
+  installManifestSchema,
+  managedFileEntrySchema,
+  readInstallManifest,
+  writeInstallManifest,
+} from "./install/install-manifest.js";
+export type {
+  InstallManifest,
+  ManagedFileEntry,
+} from "./install/install-manifest.js";
+export {
+  INSTALL_ACTIONS,
+  planInstallation,
+  toPlannedFileSource,
+} from "./install/plan-installation.js";
+export type {
+  InstallAction,
+  InstallationPlan,
+  PlanInstallationInput,
+  PlannedFile,
+  PlannedFileSource,
+} from "./install/plan-installation.js";
+export {
+  HARNESS_PACKAGE_NAME,
+  RUNTIME_INSTALL_ARGV,
+  RUNTIME_INSTALL_TIMEOUT_MS,
+  RUNTIME_PACKAGE_NAME,
+  buildRuntimePackageManifest,
+  installRuntimeDependencies,
+} from "./install/runtime-dependencies.js";
+export type { InstallRuntimeDependenciesOptions } from "./install/runtime-dependencies.js";
+export { installHarness } from "./install/install-harness.js";
+export type {
+  InstallHarnessOptions,
+  InstallHarnessResult,
+} from "./install/install-harness.js";
+export {
+  DIAGNOSTIC_STATUSES,
+  REQUIRED_NODE_VERSION,
+  REQUIRED_TOOLS,
+  diagnoseHarness,
+  versionOrder,
+} from "./install/diagnose-harness.js";
+export type {
+  DiagnoseHarnessOptions,
+  Diagnostic,
+  DiagnosticStatus,
+  HarnessDiagnosis,
+} from "./install/diagnose-harness.js";
 
 export { CLI_COMMANDS, parseCliArguments } from "./cli/parse-cli-arguments.js";
 export type {
@@ -224,6 +281,8 @@ export type {
   RunCliOptions,
 } from "./cli/run-cli.js";
 export { createDefaultCliCommands } from "./cli/default-commands.js";
+export { formatDiagnosis } from "./cli/format-diagnosis.js";
+export { formatInstallResult } from "./cli/format-install-result.js";
 export { formatPhaseGateReport } from "./cli/format-gate-report.js";
 export {
   formatRuleSetExplanation,

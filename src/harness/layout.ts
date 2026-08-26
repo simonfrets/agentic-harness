@@ -23,6 +23,7 @@ export const HARNESS_PATHS = {
   customRules: join("rules", "custom"),
   gitignore: ".gitignore",
   hooks: "hooks",
+  hooksConfig: join("config", "hooks.yaml"),
   launcher: join("bin", "harness"),
   manifest: "version.json",
   packageManifest: "package.json",
@@ -37,3 +38,13 @@ export const harnessPath = (
   projectRoot: string,
   ...segments: readonly string[]
 ): string => join(projectRoot, HARNESS_DIRECTORY, ...segments);
+
+/**
+ * The value written to git's `core.hooksPath`.
+ *
+ * It is deliberately relative: git resolves a relative hooks path against the
+ * top of the working tree the hook is running in, so one setting works in the
+ * main checkout and in every linked worktree, which an absolute path recorded
+ * once would not.
+ */
+export const HARNESS_GIT_HOOKS_PATH = `${HARNESS_DIRECTORY}/${HARNESS_PATHS.hooks}`;
