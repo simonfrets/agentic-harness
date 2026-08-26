@@ -29,6 +29,8 @@ describe("BUILT_IN_AGENT_IDS", () => {
 
 describe("isBuiltInAgentId", () => {
   it("accepts every built-in agent", () => {
+    expect(BUILT_IN_AGENT_IDS).toHaveLength(6);
+
     for (const agent of BUILT_IN_AGENT_IDS) {
       expect(isBuiltInAgentId(agent)).toBe(true);
     }

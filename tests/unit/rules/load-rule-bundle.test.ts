@@ -273,7 +273,7 @@ rules:
         phases: [pre-push]
 `);
 
-    expect(error.issues.length).toBeGreaterThan(0);
+    expect(error.issues[0]?.path).toBe("rules.0.checks.0.argv.0");
   });
 
   it("rejects an argv given as a shell string instead of an array", () => {
@@ -369,8 +369,8 @@ rules:
         script: test
         phases: [pre-push]
         timeoutMs: 10
-`).issues.length
-    ).toBeGreaterThan(0);
+`).issues[0]?.path
+    ).toBe("rules.0.checks.0.timeoutMs");
   });
 
   it("rejects an unknown check runner", () => {
@@ -393,13 +393,22 @@ rules:
   });
 
   it("rejects an unsupported bundle version and an empty rule list", () => {
-    expect(
-      expectFailure(`version: 2
+    // Both claims used one fixture carrying both defects, checked with
+    // `issues.length > 0`. The empty rule list satisfied that on its own, so
+    // relaxing `version` to any number left the test green.
+    const version = expectFailure(`version: 2
 id: base
 description: Baseline
-rules: []
-`).issues.length
-    ).toBeGreaterThan(0);
+
+rules:
+  - id: base.one
+    description: One
+    severity: error
+    appliesTo: [coder]
+    instruction: Do the thing.
+`);
+
+    expect(version.issues[0]?.path).toBe("version");
 
     expect(
       expectFailure(`version: 1

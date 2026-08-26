@@ -71,6 +71,8 @@ describe("this repository's CI workflow", () => {
     // Asserted against the parsed steps rather than the file text: the header
     // comment explains why `--no-verify` makes CI necessary, and matching that
     // would be the test failing on its own reasoning.
+    expect(commands().length).toBeGreaterThan(0);
+
     for (const command of commands()) {
       expect(command).not.toContain("--no-verify");
       expect(command).not.toContain("|| true");

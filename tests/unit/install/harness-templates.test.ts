@@ -78,6 +78,8 @@ describe("seeded templates", () => {
       (file) => file.installedPath
     );
 
+    expect(SEEDED_TEMPLATE_PATHS.length).toBeGreaterThan(0);
+
     for (const path of SEEDED_TEMPLATE_PATHS) {
       expect(shipped).toContain(path);
     }

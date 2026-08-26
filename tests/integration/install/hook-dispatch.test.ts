@@ -242,20 +242,32 @@ describe("hook dispatch over an existing hook", () => {
 
     writeFileSync(
       join(elsewhere, "pre-commit"),
-      "#!/usr/bin/env bash\nexit 0\n"
+      [
+        "#!/usr/bin/env bash",
+        `printf 'external %s\\n' "$*" >> "\${PWD}/ran.log"`,
+        "exit 0",
+        "",
+      ].join("\n")
     );
     chmodSync(join(elsewhere, "pre-commit"), 0o755);
     git(root, ["config", "--local", "core.hooksPath", elsewhere]);
 
     const result = await install(root);
 
+    fakeRuntime(root);
+
     expect(result.hooks).toContainEqual({
       hook: "pre-commit",
       chained: join(elsewhere, "pre-commit"),
     });
-    expect(
-      readFileSync(join(root, ".harness", "hooks", "pre-commit"), "utf8")
-    ).toContain(`previous_hook="${join(elsewhere, "pre-commit")}"`);
+
+    // Its relative-path sibling executes the dispatcher; this one only read
+    // the generated text, so gutting the absolute branch left it green.
+    expect(runHook(root, "pre-commit")).toMatchObject({
+      status: 0,
+      stdout: "harness gate pre-commit\n",
+    });
+    expect(ranLog(root)).toContain("external");
   });
 
   it("stops at a failing prior hook and never reaches the gate", async () => {

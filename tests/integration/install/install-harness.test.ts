@@ -141,6 +141,30 @@ const install = async (options: {
   return { result, runner };
 };
 
+/** Every file under a root, keyed by relative path, with its contents. */
+const snapshotTree = (root: string): ReadonlyMap<string, string> => {
+  const files = new Map<string, string>();
+  const walk = (directory: string, prefix: string): void => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const relativePath =
+        prefix === "" ? entry.name : `${prefix}/${entry.name}`;
+
+      if (entry.isDirectory()) {
+        walk(join(directory, entry.name), relativePath);
+      } else {
+        files.set(
+          relativePath,
+          readFileSync(join(directory, entry.name), "utf8")
+        );
+      }
+    }
+  };
+
+  walk(root, "");
+
+  return files;
+};
+
 const read = (root: string, path: string): string =>
   readFileSync(join(root, ".harness", ...path.split("/")), "utf8");
 
@@ -178,16 +202,22 @@ describe("installHarness against the real shipped package", () => {
   });
 
   it("confines its footprint to .harness and changes no host file", async () => {
+    // This stands behind acceptance criteria 1 and 2, and used to check only
+    // the top-level listing plus two named files - so a write into `src/` or
+    // `.git/` would have passed it.
     const root = buildHostProject();
-    const before = readdirSync(root).sort();
-    const manifest = readFileSync(join(root, "package.json"), "utf8");
-    const eslint = readFileSync(join(root, "eslint.config.js"), "utf8");
+    const before = snapshotTree(root);
 
     await install({ root, packageRoot });
 
-    expect(readdirSync(root).sort()).toEqual([...before, ".harness"].sort());
-    expect(readFileSync(join(root, "package.json"), "utf8")).toBe(manifest);
-    expect(readFileSync(join(root, "eslint.config.js"), "utf8")).toBe(eslint);
+    const after = snapshotTree(root);
+    const changed = [...after.keys()].filter(
+      (path) => before.get(path) !== after.get(path)
+    );
+
+    expect(before.size).toBeGreaterThan(0);
+    expect(changed.every((path) => path.startsWith(".harness/"))).toBe(true);
+    expect([...before.keys()].filter((path) => !after.has(path))).toEqual([]);
   });
 
   it("records the running harness version in the project manifest", async () => {
@@ -581,6 +611,11 @@ describe("installHarness", () => {
     await install({ root, packageRoot: buildPackage(TEMPLATES) });
 
     const stored = readInstallManifest(root);
+
+    // Without the length assertion an empty `managedFiles` made the loop
+    // vacuous - and an empty `managedFiles` is precisely the regression this
+    // exists to catch.
+    expect(stored?.managedFiles).toHaveLength(ALL_FILES.length);
 
     for (const entry of stored?.managedFiles ?? []) {
       expect(entry.sha256).toBe(hashManagedFile(read(root, entry.path)));

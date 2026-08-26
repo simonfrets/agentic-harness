@@ -57,7 +57,10 @@ describe("createNodeCommandRunner", () => {
     expect(result.output.stdout).toBe("out");
     expect(result.output.stderr).toBe("err");
     expect(result.output.truncated).toBe(false);
-    expect(result.durationMs).toBeGreaterThanOrEqual(0);
+    // `>= 0` is satisfied by a hardcoded zero. Spawning a real node process
+    // and waiting for it to close takes tens of milliseconds, so a duration
+    // that is genuinely measured cannot be zero.
+    expect(result.durationMs).toBeGreaterThan(0);
     expect(Date.parse(result.startedAt)).not.toBeNaN();
   });
 

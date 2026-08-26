@@ -137,12 +137,19 @@ describe("compileAgentPolicy", () => {
     );
   });
 
-  it("never leaks a filesystem path from the rule sources", () => {
-    const policy = compileAgentPolicy({ agentId: "coder", ruleSet: RULE_SET });
-
-    expect(policy).not.toContain("/Users/");
-    expect(policy).not.toContain("/private/");
-    expect(policy).not.toContain(".harness/rules");
+  it("is given no filesystem path it could leak", () => {
+    // Asserting the compiler's output holds no path was unfalsifiable: the
+    // path lives on `RuleSource.location`, which `resolveRuleSet` discards, so
+    // the compiler never receives one. The property worth pinning is that
+    // discard - if a future change threaded `location` onto a resolved rule,
+    // the compiler would suddenly have something to leak and nothing would
+    // have noticed.
+    expect(JSON.stringify(RULE_SET)).not.toContain("location");
+    expect(Object.keys(RULE_SET).sort()).toEqual([
+      "revision",
+      "rules",
+      "sha256",
+    ]);
   });
 
   it("neutralises Markdown control characters in rule text", () => {

@@ -167,7 +167,40 @@ describe("harness gate", () => {
     expect(result.stdout).toContain("Result: blocked by 1 required check");
   });
 
-  it("records a warning failure without blocking", async () => {
+  it("records a warning failure without blocking", () => {
+    // This used to name `format`, a script the fixture does not define, with
+    // `whenMissing: skip`. Nothing ever ran and nothing ever failed, so it
+    // exercised the missing-script path and not the one in its own title.
+    const root = project({
+      rules: {
+        "base.yaml": ruleBundleYaml({
+          bundleId: "harness-base",
+          ruleId: "base.style",
+          severity: "warning",
+          checks: projectScriptCheckYaml({
+            checkId: "native-lint",
+            script: "lint",
+            phases: ["pre-commit"],
+            required: true,
+            whenMissing: "fail",
+          }),
+        }),
+      },
+    });
+
+    return run(root, ["gate", "pre-commit"], (request) =>
+      request.command.args.includes("lint")
+        ? exited(1, { stderr: "3 problems\n" })
+        : exited(0)
+    ).then((result) => {
+      expect(result.exitCode).toBe(CLI_EXIT_CODES.ok);
+      expect(result.stdout).toContain("WARN base.style / native-lint");
+      expect(result.stdout).toContain("3 problems");
+      expect(result.stdout).toContain("Result: passed with 1 warning failure");
+    });
+  });
+
+  it("skips a check whose script the project does not define", () => {
     const root = project({
       rules: {
         "base.yaml": ruleBundleYaml({
@@ -185,11 +218,11 @@ describe("harness gate", () => {
       },
     });
 
-    const result = await run(root, ["gate", "pre-commit"]);
-
-    expect(result.exitCode).toBe(CLI_EXIT_CODES.ok);
-    expect(result.stdout).toContain("SKIP base.style / native-format");
-    expect(result.stdout).toContain("Result: passed");
+    return run(root, ["gate", "pre-commit"]).then((result) => {
+      expect(result.exitCode).toBe(CLI_EXIT_CODES.ok);
+      expect(result.stdout).toContain("SKIP base.style / native-format");
+      expect(result.stdout).toContain("Result: passed");
+    });
   });
 
   it("restricts the phase to one agent", async () => {

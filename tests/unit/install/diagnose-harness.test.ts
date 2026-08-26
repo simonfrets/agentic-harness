@@ -159,12 +159,18 @@ const healthyRoot = (): string =>
 
 describe("versionOrder", () => {
   it("orders dotted versions", () => {
-    expect(versionOrder("22.22.1")).toBeGreaterThan(
-      versionOrder("22.21.9") ?? 0
-    );
-    expect(versionOrder("23.0.0")).toBeGreaterThan(
-      versionOrder("22.99.99") ?? 0
-    );
+    // `?? 0` masked a null return on a perfectly valid version, so a
+    // regression that stopped parsing them would have gone unnoticed.
+    const order = (version: string): number => {
+      const value = versionOrder(version);
+
+      expect(value).not.toBeNull();
+
+      return value ?? Number.NaN;
+    };
+
+    expect(order("22.22.1")).toBeGreaterThan(order("22.21.9"));
+    expect(order("23.0.0")).toBeGreaterThan(order("22.99.99"));
   });
 
   it("ignores a prerelease suffix", () => {
@@ -232,6 +238,8 @@ describe("diagnoseHarness on a healthy installation", () => {
       "git",
       "bash",
     ]);
+    expect(REQUIRED_TOOLS.length).toBeGreaterThan(0);
+
     for (const tool of REQUIRED_TOOLS) {
       expect(tool.args).toEqual(["--version"]);
     }
