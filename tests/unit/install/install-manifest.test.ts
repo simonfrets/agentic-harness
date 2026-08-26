@@ -21,6 +21,8 @@ const MANIFEST: InstallManifest = {
   installedAt: "2026-08-26T00:00:00.000Z",
   updatedAt: "2026-08-26T00:00:00.000Z",
   managedFiles: [{ path: "rules/base.yaml", sha256: "a".repeat(64) }],
+  hooks: [{ hook: "pre-commit", chained: ".git/hooks/pre-commit" }],
+  previousHooksPath: null,
 };
 
 describe("readInstallManifest", () => {
@@ -55,6 +57,28 @@ describe("readInstallManifest", () => {
 
     expect(error.kind).toBe("invalid-config");
     expect(error.message).toContain("version.json");
+  });
+
+  it("defaults a manifest written before hooks were recorded", () => {
+    // A project installed by an earlier harness has no `hooks` key. Reading it
+    // as "no hooks were taken over" is correct, and is what lets `harness init`
+    // upgrade such a project instead of refusing its own manifest.
+    const root = buildHarnessProject({
+      files: {
+        ".harness/version.json": JSON.stringify({
+          version: 1,
+          harnessVersion: "0.1.0",
+          installedAt: "2026-08-26T00:00:00.000Z",
+          updatedAt: "2026-08-26T00:00:00.000Z",
+          managedFiles: [],
+        }),
+      },
+    });
+
+    expect(readInstallManifest(root)).toMatchObject({
+      hooks: [],
+      previousHooksPath: null,
+    });
   });
 
   it("refuses a manifest that does not match the schema", () => {

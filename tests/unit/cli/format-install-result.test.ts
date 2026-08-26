@@ -11,6 +11,9 @@ const RESULT: InstallHarnessResult = {
   kept: [],
   orphaned: [],
   dependenciesInstalled: true,
+  hooks: [],
+  previousHooksPath: null,
+  gitHooksPathChanged: false,
 };
 
 const format = (overrides: Partial<InstallHarnessResult> = {}): string =>
@@ -60,6 +63,39 @@ describe("formatInstallResult", () => {
     expect(format({ dependenciesInstalled: false })).toContain(
       "Runtime dependencies were not installed"
     );
+  });
+
+  it("says which hooks git now runs and what each preserves", () => {
+    const text = format({
+      hooks: [
+        { hook: "commit-msg", chained: ".git/hooks/commit-msg" },
+        { hook: "pre-commit", chained: null },
+      ],
+      gitHooksPathChanged: true,
+    });
+
+    expect(text).toContain("git now dispatches 2 hooks through .harness/hooks");
+    expect(text).toContain("  commit-msg runs .git/hooks/commit-msg first");
+    expect(text).toContain("  pre-commit\n");
+  });
+
+  it("does not claim to have changed a hooks path it left alone", () => {
+    expect(
+      format({ hooks: [{ hook: "pre-commit", chained: null }] })
+    ).toContain("git dispatches 1 hook through .harness/hooks");
+  });
+
+  it("records where the project's own hooks path pointed", () => {
+    expect(
+      format({
+        hooks: [{ hook: "pre-commit", chained: ".husky/pre-commit" }],
+        previousHooksPath: ".husky",
+      })
+    ).toContain("`core.hooksPath` was `.husky`");
+  });
+
+  it("says nothing about hooks when it manages none", () => {
+    expect(format()).not.toContain("dispatches");
   });
 
   it("pluralises the file count", () => {

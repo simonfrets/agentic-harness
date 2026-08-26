@@ -1,4 +1,3 @@
-import { spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
@@ -17,6 +16,7 @@ import { loadRuleBundle } from "../../../src/rules/load-rule-bundle.js";
 import { resolveRuleSet } from "../../../src/rules/resolve-rule-set.js";
 import type { RuleSource } from "../../../src/rules/resolve-rule-set.js";
 import type { Rule } from "../../../src/rules/rule-schema.js";
+import { initRepository, runGit } from "../../helpers/git.js";
 import {
   createTempDirectory,
   removeTempDirectories,
@@ -136,8 +136,7 @@ describe("shipped rule bundles", () => {
 });
 
 describe("the shipped .gitignore", () => {
-  const git = (root: string, args: readonly string[]) =>
-    spawnSync("git", [...args], { cwd: root, encoding: "utf8" });
+  const git = runGit;
 
   const buildRepository = (): string => {
     const root = createTempDirectory("agentic-harness-gitignore-");
@@ -147,7 +146,7 @@ describe("the shipped .gitignore", () => {
     });
     const target = join(root, ".harness", ".gitignore");
 
-    git(root, ["init", "--quiet"]);
+    initRepository(root);
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, contents);
 

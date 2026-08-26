@@ -5,6 +5,7 @@
  */
 export const HARNESS_ERROR_KINDS = [
   "dependency-install-failed",
+  "git-config-failed",
   "invalid-config",
   "not-a-git-repository",
   "not-installed",

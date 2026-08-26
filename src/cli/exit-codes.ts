@@ -26,6 +26,7 @@ export const exitCodeForHarnessError = (kind: HarnessErrorKind): number => {
     case "not-installed":
       return CLI_EXIT_CODES.invalidConfig;
     case "dependency-install-failed":
+    case "git-config-failed":
     case "not-a-git-repository":
     case "unsafe-hook-chain":
     case "unsafe-overwrite":

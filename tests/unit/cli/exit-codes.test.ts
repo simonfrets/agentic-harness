@@ -41,5 +41,8 @@ describe("CLI exit codes", () => {
     expect(exitCodeForHarnessError("dependency-install-failed")).toBe(
       CLI_EXIT_CODES.refused
     );
+    expect(exitCodeForHarnessError("git-config-failed")).toBe(
+      CLI_EXIT_CODES.refused
+    );
   });
 });
