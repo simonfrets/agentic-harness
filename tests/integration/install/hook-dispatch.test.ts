@@ -1,6 +1,12 @@
 import { spawnSync } from "node:child_process";
 import type { SpawnSyncReturns } from "node:child_process";
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 
 import { HarnessError } from "../../../src/harness/harness-error.js";
@@ -380,7 +386,65 @@ describe("hook dispatch over an existing hook", () => {
     const result = await install(root);
 
     expect(result.hooks.map((hook) => hook.hook)).toEqual(["pre-push"]);
+    // Deleted, not orphaned. Left in place it would keep gating every commit,
+    // and the manifest would no longer have an entry explaining why.
+    expect(result.removed).toEqual(["hooks/pre-commit"]);
+    expect(result.orphaned).toEqual([]);
+    expect(existsSync(join(root, ".harness", "hooks", "pre-commit"))).toBe(
+      false
+    );
+  });
+
+  it("keeps a dispatcher the project edited, rather than deleting their work", async () => {
+    const root = buildRepository();
+
+    await install(root);
+    writeFileSync(
+      join(root, ".harness", "hooks", "pre-commit"),
+      "#!/usr/bin/env bash\n# edited by the project\nexit 0\n"
+    );
+    writeFileSync(
+      join(root, ".harness", "config", "hooks.yaml"),
+      "version: 1\nhooks: []\n"
+    );
+
+    const result = await install(root);
+
+    // pre-push was untouched and goes; pre-commit carries the project's edit
+    // and stays, reported rather than deleted.
+    expect(result.removed).toEqual(["hooks/pre-push"]);
+    expect(result.kept).toContain("bin/harness");
     expect(result.orphaned).toEqual(["hooks/pre-commit"]);
+    expect(
+      readFileSync(join(root, ".harness", "hooks", "pre-commit"), "utf8")
+    ).toContain("edited by the project");
+  });
+
+  it("stops running a hook the project disabled", async () => {
+    const root = buildRepository();
+
+    await install(root);
+    fakeRuntime(root);
+    writeFileSync(
+      join(root, ".harness", "config", "hooks.yaml"),
+      [
+        "version: 1",
+        "hooks:",
+        "  - hook: pre-push",
+        "    enabled: true",
+        "    phase: pre-push",
+        "",
+      ].join("\n")
+    );
+
+    await install(root);
+    git(root, ["add", "."]);
+
+    // The gate is rigged to fail; the commit must succeed anyway, because the
+    // pre-commit dispatcher should no longer exist to run it.
+    expect(
+      git(root, ["commit", "-m", "no gate"], { HARNESS_FAKE_EXIT: "4" }).status
+    ).toBe(0);
   });
 
   it("reports a hooks config the project broke, rather than falling back", async () => {

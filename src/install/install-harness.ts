@@ -1,4 +1,4 @@
-import { chmodSync } from "node:fs";
+import { chmodSync, unlinkSync } from "node:fs";
 
 import { loadHooksConfig } from "../config/hooks-config.js";
 import type { HooksConfig } from "../config/hooks-config.js";
@@ -30,10 +30,15 @@ import {
 } from "./hook-scripts.js";
 import {
   INSTALL_MANIFEST_VERSION,
+  hashManagedFile,
   readInstallManifest,
   writeInstallManifest,
 } from "./install-manifest.js";
-import type { HookRecord, ManagedFileEntry } from "./install-manifest.js";
+import type {
+  HookRecord,
+  InstallManifest,
+  ManagedFileEntry,
+} from "./install-manifest.js";
 import { planHooks } from "./plan-hooks.js";
 import { planInstallation, toPlannedFileSource } from "./plan-installation.js";
 import type {
@@ -68,6 +73,62 @@ export interface InstallHarnessOptions {
   readonly installDependencies?: boolean;
 }
 
+interface StaleHooks {
+  /** Dispatchers deleted because this install no longer wants them. */
+  readonly removed: readonly string[];
+  /** Dispatchers left alone because the project had changed them. */
+  readonly retained: readonly string[];
+}
+
+/**
+ * Deletes hook dispatchers a previous install wrote and this one does not want.
+ *
+ * Every other orphaned managed file is reported and left in place, because a
+ * stale rule or agent definition is inert. A stale dispatcher is not: git runs
+ * whatever is in the hooks directory, so a `pre-commit` left behind after the
+ * project disabled it keeps gating every commit, with nothing in the manifest
+ * left to explain why. Reporting is the safe answer for a file nobody executes
+ * and the wrong one for a file everybody does.
+ *
+ * A dispatcher whose content no longer matches what the harness wrote is kept
+ * and reported instead: the project changed it, so deleting it would discard
+ * work, and that is the one thing this installer never does unprompted.
+ */
+const removeStaleHooks = (
+  projectRoot: string,
+  orphaned: readonly string[],
+  previous: InstallManifest | null
+): StaleHooks => {
+  const recorded = new Map(
+    (previous?.managedFiles ?? []).map((entry) => [entry.path, entry.sha256])
+  );
+  const removed: string[] = [];
+  const retained: string[] = [];
+
+  for (const path of orphaned) {
+    if (!path.startsWith(`${HARNESS_PATHS.hooks}/`)) {
+      retained.push(path);
+      continue;
+    }
+
+    const absolute = harnessPath(projectRoot, ...path.split("/"));
+    const existing = readTextFileIfPresent(absolute);
+
+    if (existing === null) {
+      continue;
+    }
+
+    if (hashManagedFile(existing) === recorded.get(path)) {
+      unlinkSync(absolute);
+      removed.push(path);
+    } else {
+      retained.push(path);
+    }
+  }
+
+  return { removed, retained };
+};
+
 export interface InstallHarnessResult {
   readonly projectRoot: string;
   readonly harnessVersion: string;
@@ -75,6 +136,8 @@ export interface InstallHarnessResult {
   readonly replaced: readonly string[];
   readonly kept: readonly string[];
   readonly orphaned: readonly string[];
+  /** Hook dispatchers deleted because git would otherwise still run them. */
+  readonly removed: readonly string[];
   readonly dependenciesInstalled: boolean;
   /** The hooks git now dispatches, and what each of them preserved. */
   readonly hooks: readonly HookRecord[];
@@ -191,15 +254,15 @@ export const installHarness = async (
 
   const desired: readonly PlannedFileSource[] = [
     ...managedContent,
-    ...(dispatchers.length === 0
-      ? []
-      : [
-          {
-            path: LAUNCHER_PATH,
-            contents: buildHarnessLauncher(),
-            kind: "managed" as const,
-          },
-        ]),
+    // Always installed, even when no git hook is managed: it is the
+    // executable a project runs the harness with, and the shipped CI workflow
+    // calls it. Tying it to hook dispatch would take it away from exactly the
+    // project that turned hooks off and relies on CI instead.
+    {
+      path: LAUNCHER_PATH,
+      contents: buildHarnessLauncher(),
+      kind: "managed" as const,
+    },
     ...dispatchers.map((dispatcher) => ({
       path: hookScriptPath(dispatcher.hook),
       contents: buildHookDispatcher(dispatcher),
@@ -228,6 +291,7 @@ export const installHarness = async (
     writeFileAtomic(absolute, file.contents, mode);
   }
 
+  const stale = removeStaleHooks(projectRoot, plan.orphaned, previous);
   const timestamp = options.now().toISOString();
   const managedFiles: ManagedFileEntry[] = plan.files.map((file) => ({
     path: file.path,
@@ -274,7 +338,8 @@ export const installHarness = async (
     created: collect(plan, "create"),
     replaced: collect(plan, "replace"),
     kept: collect(plan, "keep"),
-    orphaned: plan.orphaned,
+    orphaned: stale.retained,
+    removed: stale.removed,
     dependenciesInstalled: installDependencies,
     hooks,
     previousHooksPath,

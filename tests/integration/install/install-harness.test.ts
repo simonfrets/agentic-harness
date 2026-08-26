@@ -463,7 +463,7 @@ describe("installHarness", () => {
     expect(error.details).toEqual([]);
   });
 
-  it("writes no launcher for a project that manages no hook", async () => {
+  it("still installs the launcher for a project that manages no hook", async () => {
     const root = buildHostProject();
     const { result, runner } = await install({
       root,
@@ -475,8 +475,10 @@ describe("installHarness", () => {
 
     expect(result.hooks).toEqual([]);
     expect(result.gitHooksPathChanged).toBe(false);
-    expect(result.created).not.toContain("bin/harness");
-    expect(existsSync(join(root, ".harness", "bin"))).toBe(false);
+    // The CI workflow calls the launcher, so a project that turned hooks off
+    // and relies on CI instead is exactly the one that must still have it.
+    expect(result.created).toContain("bin/harness");
+    expect(existsSync(join(root, ".harness", "bin", "harness"))).toBe(true);
     // git keeps running its own hooks, so its configuration is left alone.
     expect(
       runner.requests.filter(

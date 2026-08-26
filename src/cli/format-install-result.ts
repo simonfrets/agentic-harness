@@ -31,6 +31,17 @@ export const formatInstallResult = (result: InstallHarnessResult): string => {
     ...result.replaced.map((path) => `  ~ ${path}`),
   ];
 
+  if (result.removed.length > 0) {
+    lines.push(
+      "",
+      `${plural(
+        result.removed.length,
+        "hook dispatcher"
+      )} removed, because git would otherwise still run them:`,
+      ...result.removed.map((path) => `  - ${path}`)
+    );
+  }
+
   if (result.orphaned.length > 0) {
     lines.push(
       "",
