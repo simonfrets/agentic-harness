@@ -1,8 +1,9 @@
-import { mkdirSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { dirname } from "node:path";
 import { lock } from "proper-lockfile";
 
 import { HarnessError, describeFailure } from "../harness/harness-error.js";
+import { HARNESS_DIRECTORY } from "../harness/layout.js";
 import { TASK_FILE_SOURCE, taskFilePath } from "./task-file.js";
 
 export interface TaskLockOptions {
@@ -93,6 +94,15 @@ export const TASK_LOCK_DEFAULTS: TaskLockOptions = {
  * uncaught exception and takes the process down. It is replaced with one that
  * records the failure, so the caller's work finishes and then the loss of the
  * lock is reported as an error it can act on.
+ *
+ * A project with no harness in it is refused rather than given one. `tasks.yaml`
+ * is not installed by `harness init`, so on the first transition it does not
+ * exist and the lock has nowhere to live but the directory beside it - but that
+ * directory is `.harness` itself, which `harness init` does install. Creating it
+ * here would mean any task call against any path left a `.harness` behind in a
+ * project that never asked for one, and the harness would be neither installed
+ * nor absent but half of each: a directory holding task state and no agents,
+ * rules or hooks to act on it.
  */
 export const withTaskLock = async <T>(
   projectRoot: string,
@@ -101,9 +111,12 @@ export const withTaskLock = async <T>(
 ): Promise<T> => {
   const path = taskFilePath(projectRoot);
 
-  // `tasks.yaml` is not installed, so on the first transition neither it nor
-  // the directory holding it exists yet, and the lock has nowhere to live.
-  mkdirSync(dirname(path), { recursive: true });
+  if (!existsSync(dirname(path))) {
+    throw new HarnessError(
+      "not-installed",
+      `${HARNESS_DIRECTORY} is not installed in this project, so there is nowhere to record a task; run \`harness init\``
+    );
+  }
 
   const compromises: Error[] = [];
   const staleMs = taskLockStaleMs(options);

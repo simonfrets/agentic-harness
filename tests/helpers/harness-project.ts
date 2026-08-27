@@ -21,11 +21,21 @@ const writeFile = (root: string, path: string, contents: string): void => {
   writeFileSync(absolute, contents);
 };
 
-/** Materialises a project that already has a `.harness` rules tree. */
+/**
+ * Materialises a project the harness is installed into.
+ *
+ * The `.harness` directory is created even when the fixture puts nothing in it,
+ * because its presence is what tells the harness a project is installed: the
+ * task lock refuses to record a transition into a project that has none rather
+ * than creating one. A fixture standing in for an uninstalled project is a bare
+ * `createTempDirectory`, not this.
+ */
 export const buildHarnessProject = (
   fixture: HarnessProjectFixture = {}
 ): string => {
   const root = createTempDirectory("agentic-harness-installed-");
+
+  mkdirSync(join(root, ".harness"), { recursive: true });
 
   if (fixture.manifest !== undefined) {
     writeFile(

@@ -14,7 +14,10 @@ import { updateTaskFile } from "../../../src/tasks/update-task-file.js";
 import { captureRejection } from "../../helpers/expect-error.js";
 import { buildHarnessProject } from "../../helpers/harness-project.js";
 import { buildTask } from "../../helpers/tasks.js";
-import { removeTempDirectories } from "../../helpers/temp-directory.js";
+import {
+  createTempDirectory,
+  removeTempDirectories,
+} from "../../helpers/temp-directory.js";
 
 afterEach(() => {
   removeTempDirectories();
@@ -27,11 +30,8 @@ const lockPath = (root: string): string =>
   join(root, ".harness", "tasks.yaml.lock");
 
 /** Takes the same filesystem lock a second harness process would take. */
-const holdTaskLock = async (root: string): Promise<() => Promise<void>> => {
-  mkdirSync(join(root, ".harness"), { recursive: true });
-
-  return lock(taskFilePath(root), { realpath: false, stale: 10_000 });
-};
+const holdTaskLock = (root: string): Promise<() => Promise<void>> =>
+  lock(taskFilePath(root), { realpath: false, stale: 10_000 });
 
 /**
  * Leaves behind the lock a harness process killed mid-transition leaves.
@@ -49,11 +49,36 @@ const abandonTaskLock = (root: string, ageMs: number): void => {
 };
 
 describe("withTaskLock", () => {
-  it("takes the lock even though the harness directory does not exist yet", async () => {
+  it("takes the lock before the task file it names exists", async () => {
     const root = buildHarnessProject();
+
+    expect(existsSync(taskFilePath(root))).toBe(false);
 
     await expect(withTaskLock(root, () => "ran")).resolves.toBe("ran");
     expect(existsSync(lockPath(root))).toBe(false);
+  });
+
+  it("refuses a project with no harness rather than installing half of one", async () => {
+    // `harness init` creates `.harness`; nothing else may. Creating it here to
+    // give the lock somewhere to live would leave a directory holding task
+    // state and no agents, rules or hooks behind every task call, against any
+    // path the caller happened to pass.
+    const root = createTempDirectory("agentic-harness-uninstalled-");
+    let ran = false;
+
+    const error = await captureRejection(
+      () =>
+        withTaskLock(root, () => {
+          ran = true;
+
+          return "ran";
+        }),
+      HarnessError
+    );
+
+    expect(error.kind).toBe("not-installed");
+    expect(ran).toBe(false);
+    expect(existsSync(join(root, ".harness"))).toBe(false);
   });
 
   it("waits for a lock another process is holding", async () => {

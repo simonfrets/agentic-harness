@@ -242,8 +242,11 @@ rest.
    default.** A seeded file written by an older harness must still parse when a
    later one adds a key. `shipped-templates.test.ts` asserts that
    `version: 1` alone validates; do not add a required key to either schema.
-9. **`buildHarnessProject()` does not create `.harness/`.** Pass
-   `files: { ".harness/…": … }`.
+9. **`buildHarnessProject()` creates `.harness/` and nothing inside it.** Pass
+   `files: { ".harness/…": … }` for content. The directory itself is what says
+   a project is installed - `withTaskLock` reports `not-installed` without it -
+   so a fixture standing in for an uninstalled project is a bare
+   `createTempDirectory`, not this.
 10. **`prettier --check .` covers the whole repository**, templates included.
 11. **Yarn and Bun are not installed on this machine**; pnpm is. Prove their
     behaviour through argument-vector unit tests.

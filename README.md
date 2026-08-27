@@ -478,6 +478,12 @@ ignored: a workflow nobody can review in a pull request is not governed by
 anything. It is neither a managed nor a seeded file, so `harness init` never
 writes it and never reconciles it; the first transition creates it.
 
+The transition creates the file, not the directory holding it. Taking the task
+lock against a project with no `.harness` reports `not-installed` and creates
+nothing, because that directory is what `harness init` installs: creating it
+here would leave a `.harness` holding task state and no agents, rules or hooks
+behind any task call made against any path.
+
 Every transition records the revision it produced and the revision its writer
 expected, the source and target agent, the resolved rule-set SHA-256, gate
 report ids and artifact paths, the timestamp, the attempt number, any failure,
