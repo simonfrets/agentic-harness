@@ -11,27 +11,33 @@ complete and this document supersedes them.
 ## Where things stand
 
 - Worktree: `<PROJECTS>/agentic-harness-codex-basic-structure`
-- Branch: `codex/basic-structure`
-- HEAD: `343f64c Enforce the gates in CI, for this repo and for installed projects`
-- Working tree clean. Pushed to `origin`; open as pull request #2 against
-  `main`, which was an empty root commit until this branch was rebased onto it.
+- Branch to start from: `main`. Cut a new branch for C work; do **not** reuse
+  `codex/basic-structure`, which is merged and kept only for its history.
+- HEAD of `main`: `4f4f589 Merge the rule kernel, installer and hook dispatch`
+- The repository is **public**, at `simonfrets/agentic-harness`.
 
 `npm run check`, `npm run build`, `npm run test:coverage` and
-`npm pack --dry-run` all pass: 520 tests across 51 suites at 99.18% statements
-against thresholds of 90/90/90/80. `src/install` and `src/project` are at 100%
-on every metric. The same gate runs in GitHub Actions on Linux and macOS, which
-is the enforcement; `.husky/pre-commit` is the convenience.
+`npm pack --dry-run` all pass: 566 tests across 52 suites at 99.2% statements
+against thresholds of 90/90/90/80.
 
-### Committed since the last handoff
+GitHub Actions runs the same gate on every push and pull request, on Linux and
+macOS, against Node 22.22.1 — the floor `engines.node` declares — and current 22. That is the enforcement; `.husky/pre-commit` is the convenience, and is
+skippable with `--no-verify`. CI is green on `main`.
 
-| Commit    | Subject                                              |
-| --------- | ---------------------------------------------------- |
-| `ebe67c9` | Record the Milestone B3 handoff                      |
-| `1c0b179` | Install the harness into a project idempotently (B3) |
-| `3fcbb3e` | Dispatch Git hooks without discarding existing ones  |
+**`v0.1.0` is released.** The harness is deliberately not on npm: an installed
+project's `.harness/package.json` pins the tarball attached to the GitHub
+release, and the owner and name come from this package's own `repository`
+field. Cutting a new release means tagging `vX.Y.Z` and attaching the exact
+`npm pack` output as `agentic-harness-X.Y.Z.tgz`, or every `harness init` will
+fail at the runtime step.
 
-Milestone B is complete. `README.md` documents the installer, the doctor and
-hook dispatch, and documents only behaviour that exists.
+### Proven end to end
+
+`harness init` was run against a real TypeScript project — real `tsc` build and
+typecheck, a real `node --test` suite, and a pre-existing `.git/hooks/pre-commit`.
+It completed, `doctor` reported ten checks OK and one warning, the project's own
+hook still ran first, a clean commit passed, a type error blocked, and a partial
+commit carrying conflict markers was refused. Do not regress any of that.
 
 ### What B3 and B4 added
 
@@ -82,13 +88,13 @@ Milestones C and D.
 
 Read these before planning Milestone C. None is hidden by a passing test.
 
-1. **`agentic-harness` is still unpublished, so a real `harness init` cannot
-   finish.** `npm install` inside `.harness/` fails with `ETARGET` and the CLI
-   exits 5. This is by design safe — files, manifest, hook dispatchers and the
-   Git setting are all written first, so re-running repairs the install — but
-   it means no end-to-end install works until the package resolves. The
-   demonstration above unpacked `npm pack`'s tarball into
-   `.harness/node_modules/` by hand to get past it.
+1. ~~`agentic-harness` is unpublished, so a real `harness init` cannot
+   finish.~~ **Fixed.** The private manifest pins a GitHub release tarball
+   rather than a registry version, and `v0.1.0` is published. Verified: npm
+   resolves the URL, and `harness init` completes with exit 0 on a real
+   project. The failure path was fixed with it — dependencies resolve _before_
+   `core.hooksPath` is redirected, so a failed install leaves hooks alone and
+   the repository still commits, and the summary prints either way.
 
 2. ~~A project cannot edit `config/project.yaml` or `config/hooks.yaml` and
    then re-run `harness init`.~~ **Fixed in C0.** Installed files now carry a
@@ -120,30 +126,27 @@ Read these before planning Milestone C. None is hidden by a passing test.
 5. **`config/models.yaml` and `config/providers.yaml` remain deferred to
    Milestone D**, which validates provider flags against a real CLI `--help`.
 
-6. ~~There is no CI, so every gate is skippable with `--no-verify`.~~ **Fixed**,
-   in two separate places, because they are two separate problems.
+6. ~~There is no CI.~~ **Fixed, and now actually executing.** Both workflows
+   are real: `.github/workflows/ci.yml` for this repository, and
+   `.harness/ci/github-actions.yml` shipped for installed projects to copy into
+   `.github/workflows/` themselves — the harness cannot place it, because
+   `.github/` is outside the `.harness/` boundary decision 1 forbids crossing.
+   `harness doctor` reports its absence as a warning. The Node version is
+   pinned rather than read from `engines.node`, because that field is a range
+   and `setup-node` resolves a range to the newest match, so the declared floor
+   would never have run; a test asserts the pin still equals the floor.
 
-   For this repository, `.github/workflows/ci.yml` runs the full completion
-   gate on Linux and macOS, taking its Node version from `engines.node` so the
-   two cannot drift. `tests/integration/ci/workflow.test.ts` asserts its exact
-   command list and that no step can pass while failing.
-
-   For an installed project the harness cannot place the workflow itself: a
-   GitHub Actions file has to live in `.github/workflows/`, outside the
-   `.harness/` boundary that design decision 1 forbids crossing. It therefore
-   ships one at `.harness/ci/github-actions.yml`, `harness init` says once that
-   it needs copying, and `harness doctor` reports its absence as a warning. If
-   a future session wants installation to place it directly, that is a second
-   documented exception to decision 1 and should be argued for as one, not
-   slipped in.
+   The shipped workflow is the **one thing still unexercised against a real
+   project** — it needs a GitHub remote to run.
 
 7. ~~`package.json` declares MIT with no `LICENSE` file.~~ **Fixed.** MIT
    `LICENSE`, `author`, and `LICENSE` in the published `files`.
 
 ## Traps this repository will spring on you
 
-The first five are carried forward and still bite. The sixth cost this session
-a corrupted branch.
+The first five are carried forward and still bite. Trap 6 cost one session a
+corrupted branch, and traps 15 to 17 are the working habits that caught the
+rest.
 
 1. **`import.meta.url` does not work under Jest.** `tsconfig.test.json`
    transpiles to CommonJS for ts-jest while the build emits NodeNext ESM. The
@@ -153,7 +156,7 @@ a corrupted branch.
 2. **A type-only module reports 0% coverage.** Declare types beside the values
    they describe.
 3. **`src/index.ts` barrel re-exports count as functions.**
-   `tests/unit/index.test.ts` holds an explicit `PUBLIC_API` list — now 140
+   `tests/unit/index.test.ts` holds an explicit `PUBLIC_API` list — now 144
    entries — that must be updated whenever an export is added.
 4. **Never weaken a gate.** `AGENTS.md` forbids it. No lowered threshold, no
    ignore comment, no `--no-verify`.
@@ -169,10 +172,21 @@ a corrupted branch.
    `git reset --mixed`, `git worktree prune`, `git branch -D`. Use
    `tests/helpers/git.ts` — `runGit`, `initRepository` and `cleanEnvironment` —
    which strips those variables and asserts that Git resolves a fixture to the
-   fixture. `nodeCommandRunner` was never at risk; its environment allowlist
-   already drops every `GIT_*` variable.
+   fixture.
+
+   **This changed, and the old note was wrong to treat it as a safety
+   property.** `nodeCommandRunner` now forwards `GIT_INDEX_FILE`, and only that
+   one. Stripping it made the shipped `git diff --check --cached` read the
+   stale on-disk index during `git commit -- <path>`, so it passed while
+   conflict markers went into the commit. `GIT_DIR`, `GIT_WORK_TREE` and
+   `GIT_PREFIX` are deliberately **not** forwarded: every command runs with an
+   explicit absolute cwd, and forwarding them broke thirteen tests the moment
+   the suite ran under this repository's own hook, because fixtures inherited
+   _this_ repository. A test driving the runner against a fixture must build it
+   with `baseEnv: cleanEnvironment()`.
+
 7. **`tests/unit/install/harness-templates.test.ts` asserts the exact list of
-   shipped template paths**, currently 13, _and_ the exact list of seeded ones.
+   shipped template paths**, currently 14, _and_ the exact list of seeded ones.
    Adding a template fails both on purpose: the second is what forces a
    decision about who owns the new file. `bin/harness` and `hooks/*` are
    generated, not templates, and are in neither list.
@@ -198,6 +212,20 @@ a corrupted branch.
     commits as "Harness Test" before anyone noticed.
 14. **This is a Git worktree and the stash stack is shared.** Never use bare
     `git stash` / `git stash pop`. Prefer a temporary WIP commit.
+15. **Run the suite under a simulated hook environment before committing.**
+    `GIT_DIR=$PWD/.git GIT_WORK_TREE=$PWD GIT_INDEX_FILE=$PWD/.git/index npx jest`.
+    The suite passing under a bare `npx jest` proves less than it looks:
+    `.husky/pre-commit` runs it with those set, and a change can be green one
+    way and red the other. This is how the over-wide allowlist was caught.
+16. **Prove a test can fail before trusting it.** A review found eighteen tests
+    whose names promised more than their bodies checked, several of which could
+    not fail at all. When adding or changing one, apply the mutation it is
+    meant to catch and watch it go red. Several existing tests were green
+    against the very regression they existed to prevent.
+17. **A scripted `str.replace` that does not match fails silently.** Two edits
+    this session did nothing because Prettier had reflowed the text being
+    matched, and one of them left a handoff claiming a defect was fixed when
+    the document still described it as open. Verify the rewrite landed.
 
 ## Milestone C scope
 
@@ -240,7 +268,7 @@ never hand-edits it. It should not go through `planInstallation` at all.
 | ---- | ----------------------------------------------------- | ----- |
 | B3   | `Install the harness into a project idempotently`     | done  |
 | B4   | `Dispatch Git hooks without discarding existing ones` | done  |
-| C0   | `Separate seeded configuration from managed files`    | open  |
+| C0   | `Separate seeded configuration from managed files`    | done  |
 | C1   | `Store task state atomically`                         | open  |
 | C2   | `Enforce workflow transitions`                        | open  |
 | C3   | `Isolate agent contexts across handoffs`              | open  |
@@ -262,10 +290,11 @@ Report any deviation directly. Do not describe partial work as complete.
 
 ## Starting prompt
 
-> Continue Agentic Harness on branch `codex/basic-structure` in the worktree
-> `<PROJECTS>/agentic-harness-codex-basic-structure`. Read
-> `AGENTS.md`, `README.md`, `docs/handoff/rule-enforcement.md` and
-> `docs/handoff/milestone-c.md` completely before writing code. Milestones A
-> and B are committed and verified. Implement C0 through C3 only, test-first,
-> with the listed commit boundaries. Do not build provider adapters. Run the
-> completion gate and report any deviation directly.
+> Continue Agentic Harness in the worktree
+> `<PROJECTS>/agentic-harness-codex-basic-structure`. Start from `main` and cut
+> a new branch for this work. Read `AGENTS.md`, `README.md`,
+> `docs/handoff/rule-enforcement.md` and `docs/handoff/milestone-c.md`
+> completely before writing code. Milestones A, B and C0 are committed,
+> released as `v0.1.0`, and verified against a real project. Implement C1
+> through C3 only, test-first, with the listed commit boundaries. Do not build
+> provider adapters. Run the completion gate and report any deviation directly.
