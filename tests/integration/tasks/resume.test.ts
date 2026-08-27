@@ -1,8 +1,23 @@
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+
+import { HarnessError } from "../../../src/harness/harness-error.js";
+import { readHarnessTemplateFile } from "../../../src/install/harness-templates.js";
+import {
+  agentContextDirectory,
+  readAgentContext,
+} from "../../../src/tasks/agent-context.js";
 import { readTaskFile, requireTask } from "../../../src/tasks/task-file.js";
 import { WORKFLOW_STATES } from "../../../src/tasks/task-schema.js";
+import { captureError } from "../../helpers/expect-error.js";
+import { initRepository, runGit } from "../../helpers/git.js";
 import { runNodeScript } from "../../helpers/node-script.js";
-import { removeTempDirectories } from "../../helpers/temp-directory.js";
 import {
+  createTempDirectory,
+  removeTempDirectories,
+} from "../../helpers/temp-directory.js";
+import {
+  RUN_ID,
   TASK_ID,
   buildWorkflowProject,
   driveWorkflow,
@@ -102,5 +117,93 @@ describe("acceptance criterion 9: a stopped workflow resumes from tasks.yaml", (
 
       expect(entries).toHaveLength(stage === "draft" ? 0 : 1);
     }
+  });
+});
+
+/**
+ * Commits the project the way an installed one is committed - with the shipped
+ * `.gitignore`, not one written to suit the test - and clones it.
+ *
+ * The clone is what another machine gets: exactly the tracked files, decided
+ * by the ignore file the harness actually installs.
+ */
+const cloneTrackedFiles = (root: string): string => {
+  const ignore = join(root, ".harness", ".gitignore");
+
+  mkdirSync(dirname(ignore), { recursive: true });
+  writeFileSync(ignore, readHarnessTemplateFile(packageRoot, "gitignore"));
+
+  initRepository(root);
+  runGit(root, ["add", "-A"]);
+  runGit(root, ["commit", "--quiet", "-m", "Start the task"]);
+
+  const destination = join(createTempDirectory("agentic-harness-clone-"), "b");
+
+  runGit(root, ["clone", "--quiet", root, destination]);
+
+  return destination;
+};
+
+describe("a workflow resumed from a fresh checkout", () => {
+  it("finds no contexts, rebuilds what it needs, and still runs no stage twice", async () => {
+    const root = buildWorkflowProject(packageRoot);
+
+    await driveWorkflow({
+      packageRoot,
+      projectRoot: root,
+      stopAfter: "implementing",
+    });
+
+    const clone = cloneTrackedFiles(root);
+
+    // What the second developer actually has. `tasks.yaml` is committed on
+    // purpose; every context the first machine wrote is under the ignored
+    // `state/` tree and did not come with it.
+    expect(existsSync(join(clone, ".harness", "tasks.yaml"))).toBe(true);
+    expect(existsSync(join(clone, ".harness", "state"))).toBe(false);
+
+    const missing = captureError(
+      () => readAgentContext(clone, agentContextDirectory(RUN_ID, "coder")),
+      HarnessError
+    );
+
+    expect(missing.kind).toBe("missing-context");
+
+    // The resume nevertheless completes, because everything a context holds is
+    // derived from files the checkout does have: the task, the rules and the
+    // agent definitions.
+    const resumed = resumeInAnotherProcess(clone);
+
+    expect(resumed.resumedAt).toBe("implementing");
+    expect(resumed.resumedContext).toBeNull();
+    expect(resumed.entered).toEqual([
+      "cleaning",
+      "architecture_review",
+      "hardening",
+      "qa",
+      "completed",
+    ]);
+
+    const finished = requireTask(readTaskFile(clone), TASK_ID);
+
+    expect(finished.state).toBe("completed");
+    expect(finished.approvedBy).toBe("a-reviewer");
+    expect(finished.history).toHaveLength(9);
+
+    // The stages the first machine ran stayed run: nothing about starting
+    // again somewhere else re-entered them.
+    for (const stage of WORKFLOW_STATES) {
+      const entries = finished.history.filter(
+        (record) => record.to === stage && record.from !== record.to
+      );
+
+      expect(entries).toHaveLength(stage === "draft" ? 0 : 1);
+    }
+
+    // And the machine that resumed wrote its own contexts where the recorded
+    // paths said they belonged.
+    expect(
+      readAgentContext(clone, agentContextDirectory(RUN_ID, "cleaner")).taskId
+    ).toBe(TASK_ID);
   });
 });

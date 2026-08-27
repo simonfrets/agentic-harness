@@ -8,6 +8,7 @@ export const HARNESS_ERROR_KINDS = [
   "git-config-failed",
   "invalid-config",
   "invalid-transition",
+  "missing-context",
   "not-a-git-repository",
   "not-installed",
   "stale-task-revision",

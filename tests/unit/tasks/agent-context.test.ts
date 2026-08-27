@@ -216,15 +216,20 @@ describe("readAgentContext", () => {
     expect(readAgentContext(root, path).policy).toBe(first.policy);
   });
 
-  it("reports a context directory that holds nothing", () => {
+  it("reports a context this machine never wrote as missing, not as broken", () => {
+    // Contexts live under the ignored `state/` tree, so a checkout of a
+    // project mid-run carries the path out of `tasks.yaml` and none of the
+    // files it names. A resumed run has to build the one it needs, which it
+    // can only decide to do if absence is distinguishable from damage.
     const root = buildHarnessProject();
     const error = captureError(
       () => readAgentContext(root, agentContextDirectory("run-1", "coder")),
       HarnessError
     );
 
-    expect(error.kind).toBe("invalid-config");
+    expect(error.kind).toBe("missing-context");
     expect(error.message).toContain("run-1/agents/coder");
+    expect(error.details.join("\n")).toContain(".harness/tasks.yaml");
   });
 
   it("reports a context file that is json but not a context", () => {

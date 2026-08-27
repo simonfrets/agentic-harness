@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, posix } from "node:path";
 
 import { agentIdSchema } from "../agents/agent-id.js";
@@ -10,6 +10,7 @@ import { writeFileAtomic } from "../harness/atomic-write.js";
 import { HarnessError } from "../harness/harness-error.js";
 import { HARNESS_DIRECTORY, HARNESS_PATHS } from "../harness/layout.js";
 import { projectScriptNameSchema } from "../rules/rule-schema.js";
+import { TASK_FILE_SOURCE } from "./task-file.js";
 import {
   projectRelativePathSchema,
   runIdSchema,
@@ -78,6 +79,12 @@ export type AgentContext = z.output<typeof agentContextSchema>;
  * The run and the agent are both in the path, which is what makes a context
  * per agent per run rather than one the pipeline passes along and edits. Both
  * segments are validated identifiers, so neither can climb out of `state/`.
+ *
+ * Being a function of the run id and the agent id - both of which `tasks.yaml`
+ * carries, and `tasks.yaml` is committed - the path means the same thing on
+ * every machine that checks the project out. The file at the end of it does
+ * not: contexts live under the ignored `state/` tree, so a fresh checkout has
+ * the name and not the file, and rebuilds what it needs there.
  */
 export const agentContextDirectory = (runId: string, agentId: string): string =>
   posix.join(
@@ -163,6 +170,11 @@ export const buildAgentContext = (
  * The destination is derived from the context rather than supplied beside it,
  * so a caller cannot write one agent's context over another's, and the path
  * recorded in `tasks.yaml` is the path the file is actually at.
+ *
+ * Writing it is cheap and repeatable on purpose. Everything in a context is
+ * derived from things a checkout already has - the task, the agent definition
+ * and the resolved rule set - so a machine that finds none writes its own
+ * rather than needing the one that made the handoff.
  */
 export const writeAgentContext = (
   projectRoot: string,
@@ -197,15 +209,31 @@ const deepFreeze = <T>(value: T): T => {
  * Every read parses the file again, so two agents never hold the same object,
  * and the result is frozen so a runtime that passed one along by mistake could
  * not turn it into the single mutable context this layout exists to prevent.
+ *
+ * A context this machine never wrote is reported as `missing-context` rather
+ * than as a broken configuration, because the two call for opposite responses:
+ * a resumed run that finds nothing has to build the context it needs, while
+ * one that finds a damaged file must not paper over it. Distinguishing them by
+ * kind rather than by message is the whole point of having kinds.
  */
 export const readAgentContext = (
   projectRoot: string,
   contextDirectory: string
 ): AgentContext => {
-  const path = absoluteContextPath(
-    projectRoot,
-    posix.join(contextDirectory, AGENT_CONTEXT_FILE)
-  );
+  const relative = posix.join(contextDirectory, AGENT_CONTEXT_FILE);
+  const path = absoluteContextPath(projectRoot, relative);
+
+  if (!existsSync(path)) {
+    throw new HarnessError(
+      "missing-context",
+      `${relative} was not written on this machine`,
+      [
+        "agent contexts live under the ignored `state/` tree, so a checkout carries none",
+        `rebuild it from ${TASK_FILE_SOURCE}, the agent definition and the resolved rule set`,
+      ]
+    );
+  }
+
   let parsed: unknown;
 
   try {
@@ -223,7 +251,7 @@ export const readAgentContext = (
   if (!result.success) {
     throw new HarnessError(
       "invalid-config",
-      `${posix.join(contextDirectory, AGENT_CONTEXT_FILE)} is not a valid agent context`,
+      `${relative} is not a valid agent context`,
       result.error.issues.map(
         (issue) => `${issue.path.join(".")}: ${issue.message}`
       )

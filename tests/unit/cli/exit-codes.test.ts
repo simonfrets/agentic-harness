@@ -65,5 +65,10 @@ describe("CLI exit codes", () => {
     expect(exitCodeForHarnessError("unknown-task")).toBe(
       CLI_EXIT_CODES.invalidConfig
     );
+    // A context the machine never wrote is a question about the state on disk
+    // too: nothing was refused, the file the caller named is simply not here.
+    expect(exitCodeForHarnessError("missing-context")).toBe(
+      CLI_EXIT_CODES.invalidConfig
+    );
   });
 });

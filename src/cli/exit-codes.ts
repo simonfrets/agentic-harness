@@ -23,6 +23,7 @@ export const CLI_EXIT_CODES = {
 export const exitCodeForHarnessError = (kind: HarnessErrorKind): number => {
   switch (kind) {
     case "invalid-config":
+    case "missing-context":
     case "not-installed":
     case "unknown-task":
       return CLI_EXIT_CODES.invalidConfig;

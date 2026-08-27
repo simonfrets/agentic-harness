@@ -488,9 +488,24 @@ A retry out of `failed` starts a new run id, so the attempt being made cannot
 overwrite the record of the one it is replacing. Resuming a `blocked` task
 keeps its run, because nothing was discarded.
 
-Everything under `state/` is ignored, so contexts are machine-local. Stopping a
-run and resuming it later needs only `tasks.yaml`: it names the stage the task
-stands at, and the stages already behind it are not run again.
+Everything under `state/` is ignored, so a context is machine-local. That is
+deliberate, and it settles what the `contextPath` recorded in `tasks.yaml`
+means: it is a name, derived from the run id and the agent id the committed
+file already carries, and not a promise that the file behind it exists on the
+machine reading it. A clone made while a task is mid-run gets every one of
+those names and none of those files.
+
+Nothing is lost with them. A context holds the agent's own capabilities and
+write scopes, the compiled policy and the rule-set hash, all derived from
+things that are tracked - the task, the agent definition and the rules - so a
+resumed run writes the context it needs at the path already recorded for it
+rather than needing the copy the machine that made the handoff wrote. Reading
+one that was never written here reports `missing-context`, which is a different
+condition from a context that is damaged and calls for a different answer.
+
+Stopping a run and resuming it - in another process, on another machine, or
+from a fresh clone - therefore needs only `tasks.yaml`: it names the stage the
+task stands at, and the stages already behind it are not run again.
 
 ## Planned modules
 
