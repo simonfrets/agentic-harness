@@ -1,0 +1,61 @@
+# The gate this repository cannot bypass.
+#
+# .husky/pre-commit runs the same commands locally, but a local hook is
+# skippable with --no-verify, so it is a convenience rather than an
+# enforcement. This workflow is the enforcement.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: Gate on ${{ matrix.os }} with Node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Both legs always report. A macOS-only failure is usually a path or
+      # shell difference, and knowing whether Linux also failed is the first
+      # thing that narrows it down.
+      fail-fast: false
+      matrix:
+        # The floor is what `engines.node` promises, so it is the version worth
+        # proving; `22` catches a break introduced by a newer release. macOS
+        # runs only the floor, because it bills at ten times Linux and the
+        # difference it exists to catch is the shell, not the Node version.
+        os: [ubuntu-latest]
+        node: ["22.22.1", "22"]
+        include:
+          - os: macos-latest
+            node: "22.22.1"
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          # Pinned, not read from `engines.node`. That field is a *range*, and
+          # setup-node resolves a range to the newest version satisfying it -
+          # so it would never once have run the minimum the project promises.
+          # tests/integration/ci/workflow.test.ts asserts this literal still
+          # equals that minimum, which is what stops the two drifting.
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run check
+
+      - run: npm run build
+
+      - run: npm run test:coverage
+
+      - run: npm pack --dry-run

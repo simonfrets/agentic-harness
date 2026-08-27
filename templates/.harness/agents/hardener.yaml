@@ -1,0 +1,23 @@
+version: 1
+id: hardener
+displayName: Hardener
+summary: >
+  Attacks the test suite: finds the cases the tests do not cover and adds them,
+  without repairing the production code they expose.
+modelProfile: coding-high
+
+tools:
+  read: true
+  search: true
+  edit: true
+  execute: true
+
+# Tests only. A hardener that may also fix production code can make its own
+# failing test pass, and the defect it found is never recorded as a defect.
+# A production fix is handed back as a new coder task.
+writeScopes:
+  - "tests/**"
+
+projectScripts:
+  - test
+  - typecheck
