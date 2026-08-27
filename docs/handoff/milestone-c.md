@@ -315,15 +315,16 @@ never hand-edits it. It should not go through `planInstallation` at all.
 
 ## What C1-C3 added
 
-| Module                          | Public surface                                                                                                                                                                                    |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/tasks/task-schema.ts`      | `TASK_STATES`, `WORKFLOW_STATES`, `INTERRUPTED_STATES`, `taskSchema`, `taskFileSchema`, `transitionRecordSchema`, `taskFailureSchema`, `projectRelativePathSchema`, `runIdSchema`, `taskIdSchema` |
-| `src/tasks/task-file.ts`        | `readTaskFile`, `writeTaskFile`, `taskFilePath`, `emptyTaskFile`, `findTask`, `requireTask`, `TASK_FILE_SOURCE`                                                                                   |
-| `src/tasks/task-lock.ts`        | `withTaskLock`, `TASK_LOCK_DEFAULTS`                                                                                                                                                              |
-| `src/tasks/update-task-file.ts` | `updateTaskFile`                                                                                                                                                                                  |
-| `src/tasks/workflow.ts`         | `allowedTransitions`, `completedStages`, `pendingStages`, `currentStage`, `nextWorkflowState`, `ACTIVE_STATES`, `TERMINAL_STATE`, `isWorkflowState`, `isInterruptedState`                         |
-| `src/tasks/transition-task.ts`  | `createTask`, `approveSpecification`, `transitionTask`, `createDefaultRunId`                                                                                                                      |
-| `src/tasks/agent-context.ts`    | `buildAgentContext`, `writeAgentContext`, `readAgentContext`, `agentContextDirectory`, `agentContextFile`, `agentContextSchema`, `contextHandoffSchema`                                           |
+| Module                          | Public surface                                                                                                                                                            |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/harness/project-path.ts`   | `projectRelativePathSchema`, `projectRelativeGlobSchema`                                                                                                                  |
+| `src/tasks/task-schema.ts`      | `TASK_STATES`, `WORKFLOW_STATES`, `INTERRUPTED_STATES`, `taskSchema`, `taskFileSchema`, `transitionRecordSchema`, `taskFailureSchema`, `runIdSchema`, `taskIdSchema`      |
+| `src/tasks/task-file.ts`        | `readTaskFile`, `writeTaskFile`, `taskFilePath`, `emptyTaskFile`, `findTask`, `requireTask`, `TASK_FILE_SOURCE`                                                           |
+| `src/tasks/task-lock.ts`        | `withTaskLock`, `TASK_LOCK_DEFAULTS`                                                                                                                                      |
+| `src/tasks/update-task-file.ts` | `updateTaskFile`                                                                                                                                                          |
+| `src/tasks/workflow.ts`         | `allowedTransitions`, `completedStages`, `pendingStages`, `currentStage`, `nextWorkflowState`, `ACTIVE_STATES`, `TERMINAL_STATE`, `isWorkflowState`, `isInterruptedState` |
+| `src/tasks/transition-task.ts`  | `createTask`, `approveSpecification`, `transitionTask`, `createDefaultRunId`                                                                                              |
+| `src/tasks/agent-context.ts`    | `buildAgentContext`, `writeAgentContext`, `readAgentContext`, `agentContextDirectory`, `agentContextFile`, `agentContextSchema`, `contextHandoffSchema`                   |
 
 `HARNESS_ERROR_KINDS` gained `invalid-transition`, `stale-task-revision`,
 `task-lock-failed` (all exit 5) and `unknown-task` (exit 3). `HARNESS_PATHS`

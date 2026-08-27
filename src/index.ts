@@ -32,6 +32,10 @@ export { resolveProjectRoot } from "./harness/resolve-project-root.js";
 export type { ResolveProjectRootOptions } from "./harness/resolve-project-root.js";
 export { loadHarnessRuleSet } from "./harness/load-harness-rule-set.js";
 export type { LoadHarnessRuleSetOptions } from "./harness/load-harness-rule-set.js";
+export {
+  projectRelativeGlobSchema,
+  projectRelativePathSchema,
+} from "./harness/project-path.js";
 
 export {
   BUILT_IN_AGENT_IDS,
@@ -309,7 +313,6 @@ export {
   TASK_FILE_VERSION,
   TASK_STATES,
   WORKFLOW_STATES,
-  projectRelativePathSchema,
   runIdSchema,
   taskFailureSchema,
   taskFileSchema,

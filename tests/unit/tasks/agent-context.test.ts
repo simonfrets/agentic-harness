@@ -112,6 +112,27 @@ describe("buildAgentContext", () => {
     expect(built.tools.edit).toBe(true);
   });
 
+  it("refuses a write scope that leaves the project", () => {
+    // A definition reaching this from anywhere but `loadAgentDefinition` -
+    // a hand-built one, or a schema that changes under it - must not be able
+    // to put a scope outside the project into a context, because the context
+    // is what a runtime enforces against.
+    const error = captureError(
+      () =>
+        context(
+          definition("coder", {
+            tools: { read: true, search: true, edit: true, execute: true },
+            writeScopes: ["/etc/**"],
+            projectScripts: ["test"],
+          })
+        ),
+      HarnessError
+    );
+
+    expect(error.kind).toBe("invalid-config");
+    expect(error.details.join("\n")).toContain("writeScopes");
+  });
+
   it("carries the rule-set hash the handoff was made under", () => {
     expect(context(definition("coder")).ruleSetSha256).toBe(RULE_SET_SHA256);
   });

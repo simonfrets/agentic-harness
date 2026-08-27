@@ -9,10 +9,13 @@ import { z } from "zod";
 import { writeFileAtomic } from "../harness/atomic-write.js";
 import { HarnessError } from "../harness/harness-error.js";
 import { HARNESS_DIRECTORY, HARNESS_PATHS } from "../harness/layout.js";
+import {
+  projectRelativeGlobSchema,
+  projectRelativePathSchema,
+} from "../harness/project-path.js";
 import { projectScriptNameSchema } from "../rules/rule-schema.js";
 import { TASK_FILE_SOURCE } from "./task-file.js";
 import {
-  projectRelativePathSchema,
   runIdSchema,
   sha256Schema,
   taskFailureSchema,
@@ -63,7 +66,7 @@ export const agentContextSchema = z.strictObject({
   ruleSetSha256: sha256Schema,
   writtenAt: timestampSchema,
   tools: agentToolsSchema,
-  writeScopes: z.array(z.string().min(1)),
+  writeScopes: z.array(projectRelativeGlobSchema),
   projectScripts: z.array(projectScriptNameSchema),
   /** The compiled policy, as Markdown. Provider-neutral. */
   policy: z.string().min(1),

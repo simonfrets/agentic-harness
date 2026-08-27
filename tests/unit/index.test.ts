@@ -160,6 +160,7 @@ const PUBLIC_API = [
   "portableProjectProfileSchema",
   "projectConfigSchema",
   "projectProfileSchema",
+  "projectRelativeGlobSchema",
   "projectRelativePathSchema",
   "readAgentContext",
   "readHarnessTemplateFile",

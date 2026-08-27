@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { agentIdSchema } from "../agents/agent-id.js";
 import type { BuiltInAgentId } from "../agents/agent-id.js";
+import { projectRelativePathSchema } from "../harness/project-path.js";
 
 /**
  * The pipeline states, in the order the workflow runs them.
@@ -137,25 +138,6 @@ export const runIdSchema = z
   .regex(
     TASK_ID_PATTERN,
     "run ids must be lower-case kebab-case, for example a uuid"
-  );
-
-const ABSOLUTE_OR_ESCAPING = /^\/|(?:^|\/)\.\.(?:\/|$)|\\/;
-
-/**
- * A path recorded in `tasks.yaml`.
- *
- * `tasks.yaml` is committed and reviewed in a pull request, so an absolute
- * path in it would publish the machine that wrote it and would mean nothing on
- * the next one. A `..` segment is refused for the same reason a run id is
- * constrained: a recorded path is later resolved against the project root, and
- * one that escapes it points at a file the harness never owned.
- */
-export const projectRelativePathSchema = z
-  .string()
-  .min(1)
-  .refine(
-    (value) => !ABSOLUTE_OR_ESCAPING.test(value),
-    "must be a relative path inside the project, with `/` separators and no `..` segment"
   );
 
 /** UTC instants only: two machines writing local times order a history wrong. */

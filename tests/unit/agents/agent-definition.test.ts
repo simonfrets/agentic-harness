@@ -73,6 +73,24 @@ describe("loadAgentDefinition", () => {
     expect(error.details.join("\n")).toContain("at least one write scope");
   });
 
+  it("rejects a write scope that leaves the project", () => {
+    // Design decision 6 puts tool enforcement in the runtime, and this is what
+    // the runtime reads to decide which files the agent may write, so a scope
+    // outside the project is a grant rather than a mislabel. `{..,src}/**`
+    // carries no `..` segment of its own and `minimatch` still matches
+    // `../outside.txt` against it, which is why the check is not the one a
+    // recorded path gets.
+    for (const scope of ["/etc/**", "../**", "{..,src}/**"]) {
+      const error = captureError(
+        () => load(EDITING.replace("'src/**'", `'${scope}'`)),
+        HarnessError
+      );
+
+      expect(error.kind).toBe("invalid-config");
+      expect(error.details.join("\n")).toContain("writeScopes");
+    }
+  });
+
   it("rejects a non-editing agent that declares a write scope", () => {
     const error = captureError(
       () =>

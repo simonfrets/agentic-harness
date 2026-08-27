@@ -390,6 +390,17 @@ Otherwise the runtime has two answers about what an agent may change, and
 whichever it happens to read becomes the real policy by accident. The same
 applies to `execute` and `projectScripts`.
 
+A write scope stays inside the project. `/etc/**` and `../**` are refused, and
+so are `{..,src}/**`, `@(..|src)/**` and `[.][.]/**`, which name a path outside
+the project without containing a `..` segment of their own - `minimatch` matches
+`../outside.txt` against all three, and `!(src)/**` reaches `/etc/passwd`. The
+wildcards left are `*`, `**` and `?`: checking where an alternation could expand
+to means expanding it, and two scopes say what one alternation was trying to.
+This is the same boundary the `artifactPaths` and `contextPath` recorded in
+`tasks.yaml` are held to, and it matters more here, because a recorded path is a
+diagnostic and a write scope is what the runtime will read to decide which files
+an agent may change.
+
 `config/project.yaml` carries only the two decisions discovery cannot make: the
 validation mode, and a pinned package manager for a repository that carries two
 lockfiles. `discoverProjectProfile` reads the installed copy, and a pin there
