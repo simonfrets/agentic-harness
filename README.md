@@ -19,9 +19,11 @@ the ones the project already had, so a gate runs on an ordinary local commit
 rather than only when someone remembers to invoke it. The two configuration
 files it installs belong to the project and can be edited freely.
 
-Task state is stored in `.harness/tasks.yaml`, which the workflow writes under
-an exclusive lock and an atomic rename. The Codex and Claude adapters are
-**not** implemented yet.
+Task state, the workflow state machine and per-agent handoff contexts are
+implemented: `.harness/tasks.yaml` records every transition under an exclusive
+lock, and each handoff writes the next agent an isolated context. The Codex and
+Claude adapters are **not** implemented yet, so nothing invokes an agent: the
+workflow is driven through the library.
 
 ## Requirements
 
@@ -422,9 +424,70 @@ exercised against a real binary in the test suite; the other three are covered
 by argument-vector unit tests, because Yarn and Bun are not assumed to be
 installed.
 
+## Task state and handoffs
+
+A task moves through nine states, in this order:
+
+```text
+draft -> specified -> awaiting_approval -> implementing -> cleaning
+      -> architecture_review -> hardening -> qa -> completed
+```
+
+Every state but `completed` may fall to `blocked` or `failed`, and both demand
+a recorded reason. Recovery out of either may target the stage the task stopped
+in or any stage before it, and never one after: that is what lets QA send work
+back to the coder without letting anything skip a stage it has not run. A
+blocked task may still be given up on; a failed one is already there.
+
+The coder cannot start before the specification is approved. Approval is its
+own revision - a separate act by a separate caller - so it can never be granted
+by the same call that starts the work. Sending a task back to `draft` or
+`specified` withdraws it, because an approval of a specification that has since
+been rewritten approves nothing.
+
+### `.harness/tasks.yaml`
+
+Task state lives in `.harness/tasks.yaml`, which is deliberately **not**
+ignored: a workflow nobody can review in a pull request is not governed by
+anything. It is neither a managed nor a seeded file, so `harness init` never
+writes it and never reconciles it; the first transition creates it.
+
+Every transition records the revision it produced and the revision its writer
+expected, the source and target agent, the resolved rule-set SHA-256, gate
+report ids and artifact paths, the timestamp, the attempt number, any failure,
+and where the next agent's context was written. A write whose expected revision
+no longer matches is refused, so two agents handed the same snapshot cannot
+both compute the next revision and have the second erase the first.
+
+Reads and writes go through one lock, held across the whole read-change-write.
+The lock is `proper-lockfile`'s; the file itself is replaced through a
+temporary sibling, an `fsync` and an atomic rename. Its `.lock` sibling is
+covered by the shipped `.gitignore`.
+
+### Agent contexts
+
+Each handoff writes the next agent a context of its own at
+
+```text
+.harness/state/runs/<run-id>/agents/<agent-id>/context.json
+```
+
+carrying that agent's own tool policy and write scopes, the compiled policy for
+the rule set in force, the rule-set hash, and what the previous agent left
+behind. There is no shared, mutable context object: the run and the agent are
+both in the path, each read parses the file again, and what comes back is
+frozen.
+
+A retry out of `failed` starts a new run id, so the attempt being made cannot
+overwrite the record of the one it is replacing. Resuming a `blocked` task
+keeps its run, because nothing was discarded.
+
+Everything under `state/` is ignored, so contexts are machine-local. Stopping a
+run and resuming it later needs only `tasks.yaml`: it names the stage the task
+stands at, and the stages already behind it are not run again.
+
 ## Planned modules
 
 - Typed Codex and Claude CLI adapter contract
 - Runtime enforcement of the shipped agent tool policies
-- Atomic `tasks.yaml` state and resumable handoffs
 - Specifier, coder, cleaner, architect, hardener, and QA agents

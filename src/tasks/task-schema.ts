@@ -79,7 +79,10 @@ export const projectRelativePathSchema = z
     "must be a relative path inside the project, with `/` separators and no `..` segment"
   );
 
-const timestampSchema = z.iso.datetime();
+/** UTC instants only: two machines writing local times order a history wrong. */
+export const timestampSchema = z.iso.datetime();
+
+export const sha256Schema = z.string().regex(/^[0-9a-f]{64}$/);
 
 /** Why a task was blocked or failed. Never a bare boolean. */
 export const taskFailureSchema = z.strictObject({
@@ -111,7 +114,7 @@ export const transitionRecordSchema = z.strictObject({
   fromAgent: agentIdSchema.nullable(),
   toAgent: agentIdSchema.nullable(),
   /** SHA-256 of the rule set resolved when the transition was taken. */
-  ruleSetSha256: z.string().regex(/^[0-9a-f]{64}$/),
+  ruleSetSha256: sha256Schema,
   gateReportIds: z.array(z.string().min(1)).default([]),
   artifactPaths: z.array(projectRelativePathSchema).default([]),
   at: timestampSchema,

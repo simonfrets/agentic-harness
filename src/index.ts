@@ -361,6 +361,22 @@ export type {
   CreateTaskRequest,
   TransitionRequest,
 } from "./tasks/transition-task.js";
+export {
+  AGENT_CONTEXT_FILE,
+  AGENT_CONTEXT_VERSION,
+  agentContextDirectory,
+  agentContextFile,
+  agentContextSchema,
+  buildAgentContext,
+  contextHandoffSchema,
+  readAgentContext,
+  writeAgentContext,
+} from "./tasks/agent-context.js";
+export type {
+  AgentContext,
+  BuildAgentContextInput,
+  ContextHandoff,
+} from "./tasks/agent-context.js";
 
 export { CLI_COMMANDS, parseCliArguments } from "./cli/parse-cli-arguments.js";
 export type {
