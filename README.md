@@ -479,6 +479,14 @@ back without another process getting in between. The lock is
 an `fsync` and an atomic rename. Its `.lock` sibling is covered by the shipped
 `.gitignore`.
 
+A harness killed while holding that lock leaves it behind, and the only thing
+that says nobody holds it is its age. The window it stays honoured for is two
+seconds - the shortest `proper-lockfile` implements, and far longer than the
+read-change-write it covers - and acquiring waits out roughly 2.8 seconds, so
+an abandoned lock is always taken over rather than reported as contention.
+Waiting less would leave `harness gate pre-commit` failing, and a failing gate
+blocks commits, for as long as the window lasts.
+
 `readTaskFile` and `writeTaskFile` are the unlocked primitives it is built
 from, and both are exported. A read on its own is whole, because a write lands
 by rename and nothing observes half a file, but it is a snapshot and it takes

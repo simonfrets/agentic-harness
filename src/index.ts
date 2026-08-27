@@ -337,7 +337,12 @@ export {
   taskFilePath,
   writeTaskFile,
 } from "./tasks/task-file.js";
-export { TASK_LOCK_DEFAULTS, withTaskLock } from "./tasks/task-lock.js";
+export {
+  TASK_LOCK_DEFAULTS,
+  taskLockRetryBudgetMs,
+  taskLockStaleMs,
+  withTaskLock,
+} from "./tasks/task-lock.js";
 export type { TaskLockOptions } from "./tasks/task-lock.js";
 export { updateTaskFile } from "./tasks/update-task-file.js";
 export {

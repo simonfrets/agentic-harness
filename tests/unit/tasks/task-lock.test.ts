@@ -1,10 +1,15 @@
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, utimesSync } from "node:fs";
 import { join } from "node:path";
 import { lock } from "proper-lockfile";
 
 import { HarnessError } from "../../../src/harness/harness-error.js";
 import { readTaskFile, taskFilePath } from "../../../src/tasks/task-file.js";
-import { withTaskLock } from "../../../src/tasks/task-lock.js";
+import {
+  TASK_LOCK_DEFAULTS,
+  taskLockRetryBudgetMs,
+  taskLockStaleMs,
+  withTaskLock,
+} from "../../../src/tasks/task-lock.js";
 import { updateTaskFile } from "../../../src/tasks/update-task-file.js";
 import { captureRejection } from "../../helpers/expect-error.js";
 import { buildHarnessProject } from "../../helpers/harness-project.js";
@@ -26,6 +31,21 @@ const holdTaskLock = async (root: string): Promise<() => Promise<void>> => {
   mkdirSync(join(root, ".harness"), { recursive: true });
 
   return lock(taskFilePath(root), { realpath: false, stale: 10_000 });
+};
+
+/**
+ * Leaves behind the lock a harness process killed mid-transition leaves.
+ *
+ * The directory is what `proper-lockfile` creates, and the mtime is what its
+ * heartbeat would have been refreshing. Backdating it is how a holder that
+ * died `ageMs` ago is expressed without waiting `ageMs` for it to happen.
+ */
+const abandonTaskLock = (root: string, ageMs: number): void => {
+  mkdirSync(lockPath(root), { recursive: true });
+
+  const when = (Date.now() - ageMs) / 1_000;
+
+  utimesSync(lockPath(root), when, when);
 };
 
 describe("withTaskLock", () => {
@@ -76,6 +96,43 @@ describe("withTaskLock", () => {
     expect(error.kind).toBe("task-lock-failed");
     expect(ran).toBe(false);
     await releaseOther();
+  });
+
+  it("takes over a lock left behind by a process that died", async () => {
+    // A killed harness leaves the lock directory with nothing behind it: no
+    // holder, no heartbeat, and only its age to say so. This is the case
+    // `staleMs` exists for, and no test reached it before.
+    //
+    // The age is a fixed 1.5s rather than one derived from the window, which
+    // is the point: derived, it would rescale with the window and pass at any
+    // setting, including the shipped one it exists to reject.
+    const root = buildHarnessProject();
+
+    abandonTaskLock(root, 1_500);
+
+    const started = Date.now();
+
+    await expect(withTaskLock(root, () => "ran")).resolves.toBe("ran");
+
+    // It cannot have been taken over on the first attempt: the lock was 500ms
+    // short of stale. So this is the retry loop outlasting the window rather
+    // than the lock having been stale on arrival. With the window ten seconds
+    // wide, as it was, the retries ran out seven seconds before the lock went
+    // stale and this reported contention that nothing was causing.
+    expect(Date.now() - started).toBeGreaterThan(400);
+    expect(existsSync(lockPath(root))).toBe(false);
+  });
+
+  it("keeps retrying for longer than a lock stays honoured", () => {
+    // The takeover above starts 500ms in. This is what makes it reachable
+    // from any age at all, the worst case being a process killed the instant
+    // before: an abandoned lock is only taken over by an attempt made after it
+    // goes stale, so a budget that expires first reports `ELOCKED` for the
+    // rest of the window - and `harness gate pre-commit` exits non-zero on
+    // that, blocking commits on a lock nobody is holding.
+    expect(taskLockRetryBudgetMs(TASK_LOCK_DEFAULTS)).toBeGreaterThan(
+      taskLockStaleMs(TASK_LOCK_DEFAULTS)
+    );
   });
 
   it("releases the lock when the work throws", async () => {

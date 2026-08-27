@@ -181,6 +181,8 @@ const PUBLIC_API = [
   "taskFilePath",
   "taskFileSchema",
   "taskIdSchema",
+  "taskLockRetryBudgetMs",
+  "taskLockStaleMs",
   "taskSchema",
   "taskStateSchema",
   "toPlannedFileSource",

@@ -9,8 +9,9 @@ export interface TaskLockOptions {
   /**
    * How long a lock left behind by a dead process stays honoured.
    *
-   * `proper-lockfile` raises anything below two seconds to two seconds, so a
-   * smaller value here is a request rather than a setting.
+   * `proper-lockfile` raises anything below `STALE_FLOOR_MS` to it, so a
+   * smaller value here is a request rather than a setting. `taskLockStaleMs`
+   * reports the window that is actually in force.
    */
   readonly staleMs: number;
   /** How many times to wait for a lock another process is holding. */
@@ -18,18 +19,59 @@ export interface TaskLockOptions {
 }
 
 /**
- * Ten retries with the backoff below wait roughly three seconds in total,
- * which covers one gate run finishing its own transition. Waiting longer would
- * mean a git hook hanging on a workflow that is not coming back; waiting less
- * would fail on ordinary contention.
+ * The shortest stale window `proper-lockfile` implements. It raises anything
+ * below this to it, so this is the floor of what the harness can ask for.
  */
-export const TASK_LOCK_DEFAULTS: TaskLockOptions = {
-  staleMs: 10_000,
-  retries: 10,
-};
+const STALE_FLOOR_MS = 2_000;
 
 const MIN_RETRY_MS = 25;
 const RETRY_FACTOR = 1.5;
+
+/** The stale window in force, which is not always the one that was asked for. */
+export const taskLockStaleMs = (options: TaskLockOptions): number =>
+  Math.max(options.staleMs, STALE_FLOOR_MS);
+
+/**
+ * How long acquiring the lock keeps trying before giving up.
+ *
+ * This has to outlast the stale window, and that is the whole reason it is
+ * computed rather than described: a lock abandoned by a process that was
+ * killed is honoured until it goes stale, so a budget that runs out first
+ * turns every attempt in between into `ELOCKED` - a hard failure reporting
+ * contention that nothing is causing. `harness gate pre-commit` exits non-zero
+ * on it, so a crash would block commits until the window passed.
+ *
+ * It mirrors the schedule `retry` computes from the options passed below,
+ * which is a geometric backoff clamped at `maxTimeout`.
+ */
+export const taskLockRetryBudgetMs = (options: TaskLockOptions): number => {
+  const ceiling = taskLockStaleMs(options);
+  let total = 0;
+
+  for (let attempt = 0; attempt < options.retries; attempt += 1) {
+    total += Math.min(MIN_RETRY_MS * RETRY_FACTOR ** attempt, ceiling);
+  }
+
+  return total;
+};
+
+/**
+ * The lock is held for one read-modify-write of `tasks.yaml` and, at most, the
+ * context written beside it - milliseconds of work. `staleMs` is therefore the
+ * floor the library allows, because every millisecond beyond the work the lock
+ * covers is a millisecond in which a lock left behind by a killed process is
+ * still believed, and nothing else can record a transition.
+ *
+ * Ten retries with the backoff above wait roughly 2.8 seconds, which outlasts
+ * that window, so a lock nobody holds is taken over on one of them instead of
+ * being reported as contention. It also still covers one gate run finishing
+ * its own transition, and a git hook that waits longer than this is hanging on
+ * a workflow that is not coming back.
+ */
+export const TASK_LOCK_DEFAULTS: TaskLockOptions = {
+  staleMs: STALE_FLOOR_MS,
+  retries: 10,
+};
 
 /**
  * Runs something while holding an exclusive lock on the task file.
@@ -64,6 +106,7 @@ export const withTaskLock = async <T>(
   mkdirSync(dirname(path), { recursive: true });
 
   const compromises: Error[] = [];
+  const staleMs = taskLockStaleMs(options);
   let release: () => Promise<void>;
 
   try {
@@ -71,12 +114,14 @@ export const withTaskLock = async <T>(
       // The file legitimately does not exist before the first write, and
       // `realpath` would refuse to lock a path it cannot resolve.
       realpath: false,
-      stale: options.staleMs,
+      // The window the library would raise this to anyway, passed explicitly
+      // so the schedule below is built from the same number.
+      stale: staleMs,
       retries: {
         retries: options.retries,
         factor: RETRY_FACTOR,
         minTimeout: MIN_RETRY_MS,
-        maxTimeout: options.staleMs,
+        maxTimeout: staleMs,
       },
       onCompromised: (error: Error) => {
         compromises.push(error);
