@@ -11,13 +11,13 @@ complete and this document supersedes them.
 ## Where things stand
 
 - Worktree: `<PROJECTS>/agentic-harness-codex-basic-structure`
-- Branch to start from: `main`. Cut a new branch for C work; do **not** reuse
+- Branch: `codex/milestone-c`, cut from `main`. Do **not** reuse
   `codex/basic-structure`, which is merged and kept only for its history.
 - HEAD of `main`: `4f4f589 Merge the rule kernel, installer and hook dispatch`
 - The repository is **public**, at `simonfrets/agentic-harness`.
 
 `npm run check`, `npm run build`, `npm run test:coverage` and
-`npm pack --dry-run` all pass: 566 tests across 52 suites at 99.2% statements
+`npm pack --dry-run` all pass: 665 tests across 60 suites at 99.3% statements
 against thresholds of 90/90/90/80.
 
 GitHub Actions runs the same gate on every push and pull request, on Linux and
@@ -43,7 +43,7 @@ commit carrying conflict markers was refused. Do not regress any of that.
 
 | Module                                | Public surface                                                                           |
 | ------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `src/install/atomic-write.ts`         | `writeFileAtomic`                                                                        |
+| `src/harness/atomic-write.ts`         | `writeFileAtomic` (moved out of `src/install/` in C1)                                    |
 | `src/install/install-manifest.ts`     | `readInstallManifest`, `writeInstallManifest`, `hashManagedFile`, `hookRecordSchema`     |
 | `src/install/plan-installation.ts`    | `planInstallation`, `toPlannedFileSource`, `INSTALL_ACTIONS`                             |
 | `src/install/runtime-dependencies.ts` | `installRuntimeDependencies`, `buildRuntimePackageManifest`, `RUNTIME_INSTALL_ARGV`      |
@@ -81,8 +81,36 @@ a temporary Git project, not only by tests:
    and the commit landed.
 
 Criterion 7 (hash stability across independent directories) is covered by
-`tests/integration/rules/hash-stability.test.ts`. Criteria 8–10 belong to
-Milestones C and D.
+`tests/integration/rules/hash-stability.test.ts`.
+
+**All six were re-checked after C1-C3**, against a fresh throwaway TypeScript
+project with a real `eslint`, `tsc` and `node --test`, a pre-existing
+`.git/hooks/pre-commit` and `commit-msg`, and the C3 build swapped into
+`.harness/node_modules` so the gate ran this code and not the released one.
+Same results: host config byte-identical, footprint `.harness/` plus
+`core.hooksPath`, project hook then gate then `commit-msg`, the custom rule as
+a fifth check, exit 4 on a real blocked commit, and the warning variant
+reported in full while the commit landed. `.harness/tasks.yaml` is absent after
+`init`, as intended.
+
+**Criterion 8** is covered by `tests/integration/tasks/handoffs.test.ts` and was
+demonstrated on that project: six agents, six context directories under one
+run, each carrying its own `tools`, `writeScopes` and compiled policy.
+
+**Criterion 9** was demonstrated with two separate Node processes driving the
+installed runtime. The first created the task, ran the specifier and the coder,
+and exited at `implementing`. The second shared nothing with it, read only
+`.harness/tasks.yaml`, reported `draft, specified, awaiting_approval` as done
+and the rest as pending, resumed at `implementing`, ran the remaining four
+agents, and reached `completed` - with `specified` and `implementing` each
+entered exactly once across both processes.
+
+The cross-process lock was demonstrated the same way and then disproved: two
+processes racing the same transition from revision 1 produced one write and one
+`stale-task-revision` refusal; with `proper-lockfile`'s mutual exclusion patched
+out of the installed runtime, both wrote and one was silently lost.
+
+**Criterion 10** is not implemented. See defect 9 below.
 
 ## Deviations and known defects
 
@@ -141,6 +169,26 @@ Read these before planning Milestone C. None is hidden by a passing test.
 
 7. ~~`package.json` declares MIT with no `LICENSE` file.~~ **Fixed.** MIT
    `LICENSE`, `author`, and `LICENSE` in the published `files`.
+
+8. **Nothing drives the workflow from the command line.** C1-C3 are a library:
+   `createTask`, `approveSpecification`, `transitionTask`, `writeAgentContext`
+   and `updateTaskFile` are exported and tested, but no `harness task` command
+   exists and no agent is ever invoked. That is deliberate - the B1 command set
+   is `init`, `doctor`, `rules validate`, `rules explain` and `gate <phase>`,
+   and the thing that would call these is the Milestone D runtime - but it does
+   mean acceptance criterion 9 was demonstrated by driving the installed
+   runtime from two Node processes rather than through a shipped command.
+
+9. **Acceptance criterion 10 is not implemented.** QA can reach `completed`
+   with no Gherkin evidence, no executable QA-procedure result and no recorded
+   notification, because none of those three things exists yet: the
+   notification adapter is Milestone D, and there is no artifact contract to
+   check the other two against. `transitionTask` records `gateReportIds` and
+   `artifactPaths` on every transition, which is the hook a later completion
+   guard will read, but it does not require them.
+
+10. **`validationMode` is still inert**, unchanged from defect 4 above. C1-C3
+    did not touch gate behaviour.
 
 ## Traps this repository will spring on you
 
@@ -262,6 +310,71 @@ C0 already answered the question C1 has to answer again: `tasks.yaml` is
 neither managed nor seeded — the harness writes it continuously and the project
 never hand-edits it. It should not go through `planInstallation` at all.
 
+## What C1-C3 added
+
+| Module                          | Public surface                                                                                                                                                                                    |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/tasks/task-schema.ts`      | `TASK_STATES`, `WORKFLOW_STATES`, `INTERRUPTED_STATES`, `taskSchema`, `taskFileSchema`, `transitionRecordSchema`, `taskFailureSchema`, `projectRelativePathSchema`, `runIdSchema`, `taskIdSchema` |
+| `src/tasks/task-file.ts`        | `readTaskFile`, `writeTaskFile`, `taskFilePath`, `emptyTaskFile`, `findTask`, `requireTask`, `TASK_FILE_SOURCE`                                                                                   |
+| `src/tasks/task-lock.ts`        | `withTaskLock`, `TASK_LOCK_DEFAULTS`                                                                                                                                                              |
+| `src/tasks/update-task-file.ts` | `updateTaskFile`                                                                                                                                                                                  |
+| `src/tasks/workflow.ts`         | `allowedTransitions`, `completedStages`, `pendingStages`, `currentStage`, `nextWorkflowState`, `ACTIVE_STATES`, `TERMINAL_STATE`, `isWorkflowState`, `isInterruptedState`                         |
+| `src/tasks/transition-task.ts`  | `createTask`, `approveSpecification`, `transitionTask`, `createDefaultRunId`                                                                                                                      |
+| `src/tasks/agent-context.ts`    | `buildAgentContext`, `writeAgentContext`, `readAgentContext`, `agentContextDirectory`, `agentContextFile`, `agentContextSchema`, `contextHandoffSchema`                                           |
+
+`HARNESS_ERROR_KINDS` gained `invalid-transition`, `stale-task-revision`,
+`task-lock-failed` (all exit 5) and `unknown-task` (exit 3). `HARNESS_PATHS`
+gained `tasks` and `runs`. `proper-lockfile` is a new runtime dependency;
+`@types/proper-lockfile` is a new dev dependency. `npm audit` reports zero
+vulnerabilities.
+
+## Decisions C1-C3 took where the specification was silent
+
+Each of these is a reading the specification does not fix. They are recorded
+here rather than left to be re-derived from the code.
+
+1. **Recovery targets.** "Only valid recovery transitions may leave them" is
+   read as: the stage the task was interrupted in, or **any stage before it**,
+   and never one after. The narrower reading - back only to where it stopped -
+   cannot express rework, so a failed QA could re-run QA but could never reach
+   the coder, and the pipeline would have no way to fix what it found. The
+   invariants that matter survive: nothing skips a stage it has not run, and
+   recovery can never reach `completed`, because an interrupted task always
+   stopped at an active state.
+
+2. **A retry mints a new run id.** The context layout
+   `.harness/state/runs/<run-id>/agents/<agent-id>/` is fixed by the design and
+   has no room for an attempt, so reusing the run would have a second attempt
+   overwrite the record of the first. A transition out of `failed` therefore
+   starts a new run; resuming out of `blocked` keeps the old one, because
+   nothing was discarded. The id is injected (`newRunId`), like `now` and
+   `createReportId` elsewhere.
+
+3. **Approval is its own revision.** "The coder cannot start before explicit
+   specification approval" is enforced by `approveSpecification`, a separate
+   call that bumps the revision and records `approvedAt` and `approvedBy`.
+   Accepting the approval as an argument to the transition that starts the
+   coder would mean it was granted by whoever wanted the work started. It
+   appears in `history` as the one record where `from` equals `to`, which keeps
+   the history total over revisions. Re-entering `draft` or `specified`
+   withdraws it.
+
+4. **`blocked` and `failed` must both record a reason**, and a transition back
+   into the pipeline must not carry one. `blocked -> failed` is an edge;
+   `failed -> blocked` is not.
+
+5. **Locking, and what was not adopted.** `proper-lockfile` is used, as the
+   design suggests. `write-file-atomic` is **not**: the repository already has
+   `writeFileAtomic`, and a second atomic-write implementation would give the
+   installer and the task store different semantics for one operation. What
+   that library had and this did not was the flush, so `writeFileAtomic` now
+   `fsync`s the temporary before the rename - which is exactly what
+   `write-file-atomic` does - and moved to `src/harness/`, since task state has
+   no business importing from `src/install/`. `proper-lockfile`'s default
+   `onCompromised` throws from a timer callback, which is an uncaught exception
+   that takes the process down; it is replaced with one that records the loss
+   and reports it as an error the caller can act on.
+
 ## Commit boundaries
 
 | Step | Subject                                               | State |
@@ -269,9 +382,9 @@ never hand-edits it. It should not go through `planInstallation` at all.
 | B3   | `Install the harness into a project idempotently`     | done  |
 | B4   | `Dispatch Git hooks without discarding existing ones` | done  |
 | C0   | `Separate seeded configuration from managed files`    | done  |
-| C1   | `Store task state atomically`                         | open  |
-| C2   | `Enforce workflow transitions`                        | open  |
-| C3   | `Isolate agent contexts across handoffs`              | open  |
+| C1   | `Store task state atomically`                         | done  |
+| C2   | `Enforce workflow transitions`                        | done  |
+| C3   | `Isolate agent contexts across handoffs`              | done  |
 
 ## Completion gate
 
@@ -288,13 +401,30 @@ repository, and re-check criteria 1–6, which the installer must not regress.
 
 Report any deviation directly. Do not describe partial work as complete.
 
+## What Milestone D starts from
+
+C1-C3 are library only. What does not exist yet, in the order a runtime needs
+it:
+
+- a `ProviderAdapter` and the Codex and Claude implementations behind it,
+  written against a real CLI `--help` rather than guessed flags;
+- runtime enforcement of `context.tools`, `writeScopes` and `projectScripts` -
+  they are written into every context and nothing reads them;
+- a completion guard for acceptance criterion 10;
+- `config/models.yaml` and `config/providers.yaml`;
+- whatever drives all of it: a `harness task` command set, or a runtime the
+  adapters are called from. Two Node scripts were enough to demonstrate
+  criterion 9; they are not a product.
+
 ## Starting prompt
 
 > Continue Agentic Harness in the worktree
 > `<PROJECTS>/agentic-harness-codex-basic-structure`. Start from `main` and cut
 > a new branch for this work. Read `AGENTS.md`, `README.md`,
 > `docs/handoff/rule-enforcement.md` and `docs/handoff/milestone-c.md`
-> completely before writing code. Milestones A, B and C0 are committed,
-> released as `v0.1.0`, and verified against a real project. Implement C1
-> through C3 only, test-first, with the listed commit boundaries. Do not build
-> provider adapters. Run the completion gate and report any deviation directly.
+> completely before writing code. Milestones A, B and C are committed and
+> verified against a real project; `v0.1.0` is the released installer, and C
+> has not been released. Implement Milestone D, test-first. Inspect the
+> installed Codex and Claude CLI `--help` before writing a single provider
+> flag; never call a live API from a test. Run the completion gate and report
+> any deviation directly.

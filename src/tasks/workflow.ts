@@ -55,7 +55,7 @@ export const nextWorkflowState = (state: WorkflowState): WorkflowState | null =>
  *
  * Derived from where the task stands rather than from its history, so that a
  * task sent back for rework reports the stages after that point as pending
- * again — which is the answer a resumed run needs, and the one a scan of
+ * again - which is the answer a resumed run needs, and the one a scan of
  * "states this task has ever entered" would get wrong.
  */
 export const completedStages = (task: Task): readonly WorkflowState[] => {

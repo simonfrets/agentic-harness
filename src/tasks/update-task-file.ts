@@ -12,7 +12,7 @@ import type { TaskFile } from "./task-schema.js";
  * expected-revision check exists to catch and this exists to avoid.
  *
  * The mutator may be asynchronous so that work which belongs to the same
- * transition — writing the next agent's context, for one — happens while the
+ * transition, writing the next agent's context among them, happens while the
  * file is still held, rather than in a window where another process could
  * record a different transition against the same revision.
  */

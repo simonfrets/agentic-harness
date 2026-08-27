@@ -35,7 +35,7 @@ const RETRY_FACTOR = 1.5;
  * Runs something while holding an exclusive lock on the task file.
  *
  * `proper-lockfile` is used rather than a lock written here: it already
- * implements the parts that are easy to get wrong — a directory `mkdir` as the
+ * implements the parts that are easy to get wrong - a directory `mkdir` as the
  * atomic primitive, an mtime heartbeat so a lock held by a process that died
  * expires, and a compromise callback for the case where the heartbeat itself
  * fails. The design says to prefer a reviewed library over a partial protocol,

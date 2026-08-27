@@ -52,7 +52,7 @@ export const emptyTaskFile = (): TaskFile => ({
 /**
  * Reads the task file, treating "absent" as "no tasks yet".
  *
- * `tasks.yaml` is not installed by `harness init` — it is neither a managed
+ * `tasks.yaml` is not installed by `harness init`: it is neither a managed
  * file the harness reconciles nor a seeded one the project owns, so it never
  * goes through the installation plan. The first transition creates it.
  */
