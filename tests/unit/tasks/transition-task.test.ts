@@ -568,6 +568,89 @@ describe("transitionTask", () => {
     expect(error.kind).toBe("unknown-task");
   });
 
+  it("refuses to hand a stage to an agent that does not own it", () => {
+    // Both are agents the harness ships and both records validate, so nothing
+    // downstream could tell this apart from a correct handoff. A driver builds
+    // the next agent's context from whoever is recorded, and design decision 6
+    // has the runtime enforce that context, so `implementing` would run under
+    // QA's policy: `edit: false` and no write scope, unable to write the
+    // implementation it was started to write.
+    const file = walkTo("awaiting_approval");
+    const error = captureError(
+      () =>
+        move(file, {
+          expectedRevision: only(file).revision,
+          to: "implementing",
+          toAgent: "qa",
+        }),
+      HarnessError
+    );
+
+    expect(error.kind).toBe("invalid-transition");
+    expect(error.details.join("\n")).toContain("owned by `coder`");
+    expect(only(file).agentId).toBeNull();
+  });
+
+  it("refuses to start a stage its own agent is not recorded for", () => {
+    // The reverse of the above, and the reason the check is an equality rather
+    // than a list of who is forbidden: a stage nobody is recorded against is a
+    // stage the runtime has no policy to enforce.
+    const file = walkTo("implementing");
+    const error = captureError(
+      () =>
+        move(file, {
+          expectedRevision: only(file).revision,
+          to: "cleaning",
+          toAgent: null,
+        }),
+      HarnessError
+    );
+
+    expect(error.kind).toBe("invalid-transition");
+    expect(error.details.join("\n")).toContain("owned by `cleaner`");
+  });
+
+  it("refuses to name an owner for a state nothing is worked on in", () => {
+    // A blocked task is stopped, not being worked on by the agent that was
+    // working when it stopped. That agent is on the record as `fromAgent`, and
+    // the stage it stopped in as `interruptedFrom`; naming it the owner of
+    // `blocked` as well would say it is still running.
+    const file = walkTo("hardening");
+    const error = captureError(
+      () =>
+        move(file, {
+          expectedRevision: only(file).revision,
+          to: "blocked",
+          toAgent: "hardener",
+          failure: { reason: "waiting on a decision", details: [] },
+        }),
+      HarnessError
+    );
+
+    expect(error.kind).toBe("invalid-transition");
+    expect(error.details.join("\n")).toContain("owned by no agent");
+  });
+
+  it("refuses a project-defined agent a stage of its own", () => {
+    // `agentIdSchema` accepts one, because a rule may target one. Owning a
+    // pipeline state is a different claim: the nine states are fixed, so there
+    // is none spare for a seventh agent, and an id that is merely well-formed
+    // is also what a misspelt built-in one looks like.
+    const file = walkTo("implementing");
+    const error = captureError(
+      () =>
+        move(file, {
+          expectedRevision: only(file).revision,
+          to: "cleaning",
+          toAgent: "tidier",
+        }),
+      HarnessError
+    );
+
+    expect(error.kind).toBe("invalid-transition");
+    expect(error.message).toContain("`tidier`");
+  });
+
   it("refuses a context path that leaves the project", () => {
     const file = walkTo("implementing");
     const error = captureError(

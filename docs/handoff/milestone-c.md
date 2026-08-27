@@ -363,7 +363,18 @@ here rather than left to be re-derived from the code.
    into the pipeline must not carry one. `blocked -> failed` is an edge;
    `failed -> blocked` is not.
 
-5. **Locking, and what was not adopted.** `proper-lockfile` is used, as the
+5. **Every state has one owning agent, or none.** The specification fixes nine
+   states and six agents and never maps one to the other, and nothing checked
+   the pairing, so a transition to `implementing` recording `qa` was accepted
+   and the coder's stage would have run under QA's tool policy. `STATE_AGENTS`
+   is now that mapping, total over every state and enforced on the transition
+   that records it and on the task the file carries. `specified` is the
+   specifier's; `draft`, `awaiting_approval`, `completed`, `blocked` and
+   `failed` own nobody. A project-defined agent id still validates, because a
+   rule may target one, but cannot own a state. History is deliberately not
+   validated against the mapping: it records what was believed at the time.
+
+6. **Locking, and what was not adopted.** `proper-lockfile` is used, as the
    design suggests. `write-file-atomic` is **not**: the repository already has
    `writeFileAtomic`, and a second atomic-write implementation would give the
    installer and the task store different semantics for one operation. What

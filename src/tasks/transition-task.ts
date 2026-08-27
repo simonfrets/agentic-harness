@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { AgentId } from "../agents/agent-id.js";
 import { HarnessError } from "../harness/harness-error.js";
 import { TASK_FILE_SOURCE, findTask, requireTask } from "./task-file.js";
-import { taskSchema } from "./task-schema.js";
+import { STATE_AGENTS, describeStateOwner, taskSchema } from "./task-schema.js";
 import type {
   Task,
   TaskFailure,
@@ -201,7 +201,14 @@ export interface TransitionRequest {
   /** The revision the caller decided against. A mismatch is refused. */
   readonly expectedRevision: number;
   readonly to: TaskState;
-  /** The agent that owns the target state, or null where none does. */
+  /**
+   * The agent that owns the target state, and refused if it is any other.
+   *
+   * `STATE_AGENTS` says which that is, and `null` is the answer for the four
+   * states no agent runs in. It is passed rather than derived so that a caller
+   * that has decided wrongly is told, instead of having its answer quietly
+   * replaced by the right one.
+   */
   readonly toAgent: AgentId | null;
   readonly ruleSetSha256: string;
   readonly at: Date;
@@ -221,8 +228,8 @@ export interface TransitionRequest {
  * Every rule the design fixes is enforced here rather than described in a
  * prompt: the pipeline order, the two interrupted states every active state
  * can fall into, the recovery transitions that are the only way out of them,
- * and the requirement that a specification be approved by an earlier revision
- * before the coder may start.
+ * the agent each state belongs to, and the requirement that a specification be
+ * approved by an earlier revision before the coder may start.
  */
 export const transitionTask = (
   file: TaskFile,
@@ -242,6 +249,17 @@ export const transitionTask = (
         allowed.length === 0
           ? `\`${task.state}\` is final`
           : `it may move to: ${allowed.join(", ")}`,
+      ]
+    );
+  }
+
+  if (request.toAgent !== STATE_AGENTS[request.to]) {
+    throw new HarnessError(
+      "invalid-transition",
+      `task \`${task.id}\` cannot enter \`${request.to}\` as \`${request.toAgent ?? "null"}\``,
+      [
+        `\`${request.to}\` is owned by ${describeStateOwner(request.to)}`,
+        "the agent recorded here is the one whose tools and write scopes the stage runs under, so naming another hands it the wrong policy",
       ]
     );
   }

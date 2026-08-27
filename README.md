@@ -442,6 +442,19 @@ in or any stage before it, and never one after: that is what lets QA send work
 back to the coder without letting anything skip a stage it has not run. A
 blocked task may still be given up on; a failed one is already there.
 
+Every state names the agent that owns it, and a transition recording any other
+is refused. `specified` is the specifier's, and `implementing`, `cleaning`,
+`architecture_review`, `hardening` and `qa` belong to the agents they are named
+after. `draft`, `awaiting_approval`, `completed`, `blocked` and `failed` belong
+to nobody: a task in one of them is written down, waiting on a person, finished
+or stopped, and in none of them is an agent running. The recorded agent is what
+a runtime builds the next context from and enforces tools and write scopes
+against, so recording another would run the stage under the wrong policy - the
+coder under QA's `edit: false` and no write scope, or QA with the coder's - and
+both records would otherwise validate. A project-defined agent id is accepted
+everywhere a rule may target one, but it cannot own a pipeline state: the nine
+states are fixed, so there is none spare for a seventh agent.
+
 The stage a task stopped in is recorded as one of the eight active stages, and
 never as `completed`, `blocked` or `failed`. Recovery is the stages up to and
 including that one, and `tasks.yaml` is committed and hand-editable, so a file

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { agentIdSchema } from "../agents/agent-id.js";
+import type { BuiltInAgentId } from "../agents/agent-id.js";
 
 /**
  * The pipeline states, in the order the workflow runs them.
@@ -69,6 +70,52 @@ export const ACTIVE_STATES: readonly ActiveState[] = WORKFLOW_STATES.filter(
  * any work happened in.
  */
 const activeStateSchema = z.enum(ACTIVE_STATES);
+
+/**
+ * The agent that owns each state, or `null` where none does.
+ *
+ * The specification fixes nine states and six agents and never says which
+ * belongs to which, but something has to: design decision 6 puts tool
+ * enforcement in the runtime, and what the runtime enforces is the policy of
+ * the agent recorded against the state. Record the wrong one and the stage
+ * runs under another agent's rights - `implementing` under QA's `edit: false`
+ * and no write scope, or `qa` with the coder's - and nothing would say so,
+ * because both are agents the harness ships and both records validate.
+ *
+ * Five states name their owner outright. `specified` is the specifier's: it is
+ * the stage whose work is the specification. The other four own nobody, and
+ * each for its own reason. `draft` is where a task is written down before
+ * anything picks it up, `awaiting_approval` waits on a person rather than an
+ * agent, `completed` is over, and `blocked` and `failed` are not stages at all
+ * - nothing is being worked on in either, which is exactly what makes them
+ * interruptions. Keeping whoever ran last as the owner of those would name an
+ * agent that is not running.
+ *
+ * The mapping is total and closed. A project-defined agent id validates,
+ * because a rule may target one, but it cannot own a pipeline state: the nine
+ * states are fixed by the design, so there is no state left for a seventh
+ * agent, and giving it one would be a change to this array either way.
+ */
+export const STATE_AGENTS = {
+  draft: null,
+  specified: "specifier",
+  awaiting_approval: null,
+  implementing: "coder",
+  cleaning: "cleaner",
+  architecture_review: "architect",
+  hardening: "hardener",
+  qa: "qa",
+  completed: null,
+  blocked: null,
+  failed: null,
+} as const satisfies Record<TaskState, BuiltInAgentId | null>;
+
+/** How an owner reads in a message, including where there is not one. */
+export const describeStateOwner = (state: TaskState): string => {
+  const owner = STATE_AGENTS[state];
+
+  return owner === null ? "no agent" : `\`${owner}\``;
+};
 
 const TASK_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -193,6 +240,15 @@ const taskShape = z.strictObject({
  * An approval is one fact, so half of it is not a state the file may record.
  * Reading `approvedAt` without knowing who granted it would leave the audit
  * trail unable to answer the only question it exists for.
+ *
+ * `agentId` is held to `STATE_AGENTS` for the reason `interruptedFrom` is held
+ * to the active stages: `tasks.yaml` is committed and read in a pull request,
+ * so a hand edit or a merge conflict is all it takes to put an agent against a
+ * state it does not own, and a runtime reading it would hand that stage that
+ * agent's tools and write scopes. The `history` is deliberately not checked
+ * against the mapping. It records what the workflow believed at the time, and
+ * a mapping that ever changed would otherwise make every file written before
+ * the change unreadable rather than merely out of date.
  */
 export const taskSchema = taskShape.superRefine((task, ctx) => {
   if ((task.approvedAt === null) !== (task.approvedBy === null)) {
@@ -201,6 +257,14 @@ export const taskSchema = taskShape.superRefine((task, ctx) => {
       path: ["approvedBy"],
       message:
         "`approvedAt` and `approvedBy` are one fact: record both or neither",
+    });
+  }
+
+  if (task.agentId !== STATE_AGENTS[task.state]) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["agentId"],
+      message: `\`${task.state}\` is owned by ${describeStateOwner(task.state)}, not \`${task.agentId ?? "null"}\``,
     });
   }
 });

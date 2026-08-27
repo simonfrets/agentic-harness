@@ -347,6 +347,7 @@ export type { TaskLockOptions } from "./tasks/task-lock.js";
 export { updateTaskFile } from "./tasks/update-task-file.js";
 export {
   ACTIVE_STATES,
+  STATE_AGENTS,
   TERMINAL_STATE,
   allowedTransitions,
   completedStages,

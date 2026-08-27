@@ -1,6 +1,7 @@
 import {
   ACTIVE_STATES,
   INTERRUPTED_STATES,
+  STATE_AGENTS,
   TERMINAL_STATE,
   WORKFLOW_STATES,
 } from "./task-schema.js";
@@ -13,10 +14,11 @@ import type {
 
 /**
  * Re-exported rather than defined here: `interruptedFrom` has to be validated
- * as an active stage, so the vocabulary has to exist beside the schema. This
- * is still where the pipeline is reasoned about.
+ * as an active stage and `agentId` as the owner of the state it sits in, so
+ * both have to exist beside the schema. This is still where the pipeline is
+ * reasoned about.
  */
-export { ACTIVE_STATES, TERMINAL_STATE };
+export { ACTIVE_STATES, STATE_AGENTS, TERMINAL_STATE };
 
 export const isWorkflowState = (state: TaskState): state is WorkflowState =>
   (WORKFLOW_STATES as readonly TaskState[]).includes(state);

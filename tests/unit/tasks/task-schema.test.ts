@@ -147,6 +147,41 @@ describe("taskSchema", () => {
     ).toBe(true);
   });
 
+  it("refuses an agent recorded against a state it does not own", () => {
+    // `tasks.yaml` is committed and reviewed, so a hand edit or a merge
+    // conflict is all it takes to write this, and a runtime reading it would
+    // hand the stage the named agent's tools and write scopes.
+    for (const [state, agentId] of [
+      ["implementing", "qa"],
+      ["qa", "coder"],
+      ["cleaning", null],
+      ["draft", "specifier"],
+      ["completed", "qa"],
+      ["blocked", "hardener"],
+    ] as const) {
+      expect(
+        taskSchema.safeParse(
+          buildTask({
+            state,
+            agentId,
+            ...(state === "blocked" ? { interruptedFrom: "hardening" } : {}),
+          })
+        ).success
+      ).toBe(false);
+    }
+
+    for (const [state, agentId] of [
+      ["implementing", "coder"],
+      ["specified", "specifier"],
+      ["awaiting_approval", null],
+      ["completed", null],
+    ] as const) {
+      expect(taskSchema.safeParse(buildTask({ state, agentId })).success).toBe(
+        true
+      );
+    }
+  });
+
   it("refuses a state it has no transition rules for", () => {
     expect(
       taskSchema.safeParse(buildTask({ state: "in_review" as "draft" })).success
