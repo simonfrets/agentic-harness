@@ -28,6 +28,26 @@ const STALE_FLOOR_MS = 2_000;
 const MIN_RETRY_MS = 25;
 const RETRY_FACTOR = 1.5;
 
+/**
+ * The code `proper-lockfile` reports genuine contention with.
+ *
+ * It is the one failure of acquisition that means what the operator can act on
+ * by waiting. Everything else the call can fail with - `EACCES` on a directory
+ * the process cannot write, `ENOSPC`, `ENOTDIR` where `.harness` is not a
+ * directory at all - comes from the filesystem and is answered by fixing the
+ * filesystem.
+ */
+const CONTENTION_CODE = "ELOCKED";
+
+/** The `code` of a thrown value, for the errors that carry one. */
+const failureCode = (error: unknown): string | null =>
+  typeof error === "object" &&
+  error !== null &&
+  "code" in error &&
+  typeof error.code === "string"
+    ? error.code
+    : null;
+
 /** The stale window in force, which is not always the one that was asked for. */
 export const taskLockStaleMs = (options: TaskLockOptions): number =>
   Math.max(options.staleMs, STALE_FLOOR_MS);
@@ -141,9 +161,15 @@ export const withTaskLock = async <T>(
       },
     });
   } catch (error: unknown) {
+    // The cause survived in `details` before this, but the headline claimed
+    // contention whatever had happened, so the first line an operator read was
+    // wrong for every cause but one - and the one it named is the only cause
+    // that resolves itself.
     throw new HarnessError(
       "task-lock-failed",
-      `another process is holding the lock on ${TASK_FILE_SOURCE}`,
+      failureCode(error) === CONTENTION_CODE
+        ? `another process is holding the lock on ${TASK_FILE_SOURCE}`
+        : `the lock on ${TASK_FILE_SOURCE} could not be taken`,
       [describeFailure(error)]
     );
   }

@@ -1,4 +1,10 @@
-import { existsSync, mkdirSync, rmSync, utimesSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { lock } from "proper-lockfile";
 
@@ -119,8 +125,43 @@ describe("withTaskLock", () => {
     );
 
     expect(error.kind).toBe("task-lock-failed");
+    expect(error.message).toContain("another process is holding the lock");
     expect(ran).toBe(false);
     await releaseOther();
+  });
+
+  it("names a failure that is not contention instead of blaming a process", async () => {
+    // `.harness` as a regular file makes the lock's own `mkdir` fail with
+    // `ENOTDIR`. That stands for every cause that is not contention - `EACCES`
+    // on a directory the process cannot write, `ENOSPC`, a parent that is not
+    // a directory - and none of them is answered by waiting for anyone to let
+    // go, which is what the one headline this reported used to tell an
+    // operator to do.
+    const root = createTempDirectory("agentic-harness-unlockable-");
+    let ran = false;
+
+    writeFileSync(join(root, ".harness"), "");
+
+    const error = await captureRejection(
+      () =>
+        withTaskLock(
+          root,
+          () => {
+            ran = true;
+
+            return "ran";
+          },
+          { staleMs: 10_000, retries: 0 }
+        ),
+      HarnessError
+    );
+
+    expect(error.kind).toBe("task-lock-failed");
+    expect(error.message).not.toContain("another process is holding");
+    expect(error.message).toContain("could not be taken");
+    // The cause reaches the operator, and it is the real one.
+    expect(error.message).toContain("ENOTDIR");
+    expect(ran).toBe(false);
   });
 
   it("takes over a lock left behind by a process that died", async () => {

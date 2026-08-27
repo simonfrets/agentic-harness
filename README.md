@@ -506,6 +506,13 @@ an abandoned lock is always taken over rather than reported as contention.
 Waiting less would leave `harness gate pre-commit` failing, and a failing gate
 blocks commits, for as long as the window lasts.
 
+Contention is reported as contention, and nothing else is. `proper-lockfile`
+raises `ELOCKED` for a lock another process is genuinely holding; anything else
+that stops the lock being taken - a `.harness` the process cannot write, a full
+filesystem, a `.harness` that is not a directory - is reported as a lock that
+could not be taken, with the cause beneath it. Waiting is the answer to exactly
+one of those.
+
 `readTaskFile` and `writeTaskFile` are the unlocked primitives it is built
 from, and both are exported. A read on its own is whole, because a write lands
 by rename and nothing observes half a file, but it is a snapshot and it takes
