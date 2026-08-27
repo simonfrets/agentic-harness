@@ -190,6 +190,31 @@ Read these before planning Milestone C. None is hidden by a passing test.
 10. **`validationMode` is still inert**, unchanged from defect 4 above. C1-C3
     did not touch gate behaviour.
 
+11. **`proper-lockfile@4.1.2` pins a transitive major that has moved on, and
+    there is nothing to do about it.** It depends on `signal-exit@^3.0.2` while
+    `signal-exit` is at `4.1.0`, and on `retry@^0.12.0` while `retry` is at
+    `0.13.1`, so the production tree carries `signal-exit@3.0.7` and
+    `retry@0.12.0`. `4.1.2` is the latest published `proper-lockfile`, so there
+    is no upgrade to take, and the pins are its own.
+
+    Recorded so it is not rediscovered as a finding. Nothing here is a
+    vulnerability or a deprecation: `npm audit --omit=dev` reports zero
+    vulnerabilities, and `npm ci --dry-run --ignore-scripts` over the whole
+    423-package tree prints no deprecation warning at all. The registry carries
+    no `deprecated` field on `signal-exit@3.0.7`, on `signal-exit@4.1.0`, or on
+    any version of the four other production packages except `graceful-fs`,
+    whose deprecated versions are its 1.x-3.x line and `4.2.7` - none of them
+    the `4.2.11` installed here. A review that reads "deprecated" from a stale
+    major is reading something that is not there.
+
+    Do not churn the dependency tree over it. Overriding `signal-exit` to `4.x`
+    would replace a version `proper-lockfile` is tested against with one it is
+    not, to fix a warning nothing emits. `proper-lockfile` uses it to remove a
+    held lock when the process exits, which is the part of the lock protocol
+    the harness picked a reviewed library for in the first place. The condition
+    that would change this is `proper-lockfile` publishing a release that moves
+    the pin, or one of these acquiring a real advisory.
+
 ## Traps this repository will spring on you
 
 The first five are carried forward and still bite. Trap 6 cost one session a
