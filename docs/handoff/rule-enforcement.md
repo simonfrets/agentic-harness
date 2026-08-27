@@ -1,5 +1,5 @@
 > **Archived handoff.** This document was written by the Codex session that
-> produced commit `5be5ddd` and is preserved verbatim below as the authoritative
+> produced commit `edb1793` and is preserved verbatim below as the authoritative
 > design for Milestones A-D. It is kept in the repository because the only other
 > copy lived in `/private/tmp`, which macOS purges.
 >
@@ -29,7 +29,7 @@ prompt; a required gate must still fail the handoff or commit.
 
 - Worktree: `<PROJECTS>/agentic-harness-codex-basic-structure`
 - Branch: `codex/basic-structure`
-- HEAD: `5be5ddd Add TypeScript package skeleton and pre-commit quality gates`
+- HEAD: `edb1793 Add TypeScript package skeleton and pre-commit quality gates`
 - Worktree was clean at handoff creation.
 - `main` is still an unborn branch in the original worktree. Do not implement
   there.

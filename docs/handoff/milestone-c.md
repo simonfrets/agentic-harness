@@ -13,7 +13,7 @@ complete and this document supersedes them.
 - Worktree: `<PROJECTS>/agentic-harness-codex-basic-structure`
 - Branch: `codex/milestone-c`, cut from `main`. Do **not** reuse
   `codex/basic-structure`, which is merged and kept only for its history.
-- HEAD of `main`: `4f4f589 Merge the rule kernel, installer and hook dispatch`
+- HEAD of `main`: `bf9b4f9 Merge the rule kernel, installer and hook dispatch`
 - The repository is **public**, at `simonfrets/agentic-harness`.
 
 `npm run check`, `npm run build`, `npm run test:coverage` and
@@ -214,7 +214,7 @@ rest.
 6. **A test that spawns `git` must scrub `GIT_*` from the environment first.**
    Git exports `GIT_DIR`, `GIT_WORK_TREE` and `GIT_INDEX_FILE` to the hooks it
    runs, and `.husky/pre-commit` runs the whole suite. The first attempt at
-   `3fcbb3e` therefore ran its fixtures against _this_ repository: it rewrote
+   `966808b` therefore ran its fixtures against _this_ repository: it rewrote
    the branch HEAD to a one-file commit, created a stray `feature` branch and
    registered a worktree pointing into `/tmp`. Recovery was
    `git reset --mixed`, `git worktree prune`, `git branch -D`. Use

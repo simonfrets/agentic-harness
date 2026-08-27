@@ -1,4 +1,4 @@
-> **Archived handoff.** Milestone B is complete as of `3fcbb3e`. See
+> **Archived handoff.** Milestone B is complete as of `966808b`. See
 > `docs/handoff/milestone-c.md` for the current state.
 
 ---
@@ -16,9 +16,9 @@ code.
 
 - Worktree: `<PROJECTS>/agentic-harness-codex-basic-structure`
 - Branch: `codex/basic-structure`
-- HEAD: `fa4ec48 Enforce rule checks at workflow gates`
+- HEAD: `599c1ac Enforce rule checks at workflow gates`
 - Working tree clean. Nothing pushed; no remote exists.
-- `main` (`41c815a`) is an unrelated root commit in the other worktree. Do not
+- `main` (`edc7e00`) is an unrelated root commit in the other worktree. Do not
   implement there.
 
 Milestone A is complete and verified: `npm run check`, `npm run build`, and
