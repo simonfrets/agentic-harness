@@ -110,6 +110,13 @@ describe("acceptance criterion 9: a stopped workflow resumes from tasks.yaml", (
     // `draft` - which nothing transitions into - entered exactly once.
     expect(finished.history).toHaveLength(9);
 
+    // Nine records, nine instants, in order - though the last four were
+    // written by a process that had nothing of the first but this file.
+    const timestamps = finished.history.map((record) => record.at);
+
+    expect(new Set(timestamps).size).toBe(timestamps.length);
+    expect(timestamps).toEqual([...timestamps].sort());
+
     for (const stage of WORKFLOW_STATES) {
       const entries = finished.history.filter(
         (record) => record.to === stage && record.from !== record.to

@@ -19,6 +19,16 @@ afterEach(() => {
 
 const AT = new Date("2026-08-27T10:00:00.000Z");
 
+/**
+ * The instant of the nth write, a minute after the one before it.
+ *
+ * A pipeline driven at one instant throughout cannot tell a transition stamped
+ * with the task's creation time from one stamped with its own, so a history
+ * that ordered wrongly would still read as correct here.
+ */
+const instantOf = (step: number): Date =>
+  new Date(AT.getTime() + step * 60_000);
+
 const only = (root: string): Task =>
   requireTask(readTaskFile(root), "add-login");
 
@@ -44,7 +54,9 @@ const runPipeline = async (root: string): Promise<void> => {
     })
   );
 
-  for (const [to, toAgent] of HANDOFFS) {
+  for (const [step, [to, toAgent]] of HANDOFFS.entries()) {
+    const at = instantOf(step + 1);
+
     await updateTaskFile(root, (file) => {
       const task = file.tasks[0];
 
@@ -59,7 +71,9 @@ const runPipeline = async (root: string): Promise<void> => {
             expectedRevision: task.revision,
             approvedBy: "a-reviewer",
             ruleSetSha256: RULE_SET_SHA256,
-            at: AT,
+            // The approval is granted while the task waits, so it happens
+            // before the transition it unblocks rather than alongside it.
+            at: new Date(at.getTime() - 30_000),
           }),
           {
             taskId: task.id,
@@ -67,7 +81,7 @@ const runPipeline = async (root: string): Promise<void> => {
             to,
             toAgent,
             ruleSetSha256: RULE_SET_SHA256,
-            at: AT,
+            at,
           }
         );
       }
@@ -78,7 +92,7 @@ const runPipeline = async (root: string): Promise<void> => {
         to,
         toAgent,
         ruleSetSha256: RULE_SET_SHA256,
-        at: AT,
+        at,
       });
     });
   }
@@ -101,6 +115,25 @@ describe("a task driven through the file on disk", () => {
     );
     expect(pendingStages(task)).toEqual([]);
     expect(completedStages(task)).toHaveLength(9);
+  });
+
+  it("carries each transition's own instant through the file", async () => {
+    const root = buildHarnessProject();
+
+    await runPipeline(root);
+
+    const task = only(root);
+    const timestamps = task.history.map((record) => record.at);
+
+    // What an audit asks of this file is when a stage was entered, and the
+    // only thing that can answer is the instant on the record. A record
+    // stamped with the task's creation time, or with the instant of the write
+    // before it, answers a different question and reads as if it had answered
+    // this one.
+    expect(timestamps).not.toContain(task.createdAt);
+    expect(new Set(timestamps).size).toBe(timestamps.length);
+    expect(timestamps).toEqual([...timestamps].sort());
+    expect(timestamps.at(-1)).toBe(task.updatedAt);
   });
 
   it("rejects a second writer working from the revision it read first", async () => {

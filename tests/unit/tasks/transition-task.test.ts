@@ -15,7 +15,17 @@ import {
   buildTaskFile,
 } from "../../helpers/tasks.js";
 
+/**
+ * The instant a test's own transition happens at.
+ *
+ * It is deliberately later than everything `walkTo` records, so a transition
+ * stamped with any instant the task was already carrying is a different
+ * timestamp rather than the same one.
+ */
 const AT = new Date("2026-08-27T10:00:00.000Z");
+
+/** When the task under test was written down. An hour before anything moves. */
+const CREATED_AT = new Date("2026-08-27T09:00:00.000Z");
 
 const only = (file: TaskFile): Task => requireTask(file, "add-login");
 
@@ -31,16 +41,33 @@ const move = (
     ...request,
   });
 
-/** Walks a task from `draft` to the state a test wants to start from. */
+/**
+ * Walks a task from `draft` to the state a test wants to start from.
+ *
+ * Creation, the approval and every step take an instant of their own, a minute
+ * apart and all of them before `AT`. A task built at the same instant it is
+ * then transitioned at cannot tell the two apart, so a record stamped with the
+ * task's creation time - or with the time of the transition before it - would
+ * read as correct, and the history would order wrongly for exactly the audit
+ * question it exists to answer.
+ */
 const walkTo = (state: Task["state"], approvedBy = "a-reviewer"): TaskFile => {
   let file = createTask(buildTaskFile(), {
     id: "add-login",
     title: "Add login",
     runId: "run-1",
-    at: AT,
+    at: CREATED_AT,
   });
+  let minutes = 0;
+  const nextInstant = (): Date =>
+    new Date(CREATED_AT.getTime() + ++minutes * 60_000);
   const step = (to: Task["state"], toAgent: string | null): void => {
-    file = move(file, { expectedRevision: only(file).revision, to, toAgent });
+    file = move(file, {
+      expectedRevision: only(file).revision,
+      to,
+      toAgent,
+      at: nextInstant(),
+    });
   };
 
   if (state === "draft") {
@@ -59,7 +86,7 @@ const walkTo = (state: Task["state"], approvedBy = "a-reviewer"): TaskFile => {
     expectedRevision: only(file).revision,
     approvedBy,
     ruleSetSha256: RULE_SET_SHA256,
-    at: AT,
+    at: nextInstant(),
   });
 
   if (state === "awaiting_approval") {
@@ -208,7 +235,10 @@ describe("approval", () => {
     const before = only(walkTo("awaiting_approval"));
     const approval = before.history.at(-1);
 
-    expect(before.approvedAt).toBe(AT.toISOString());
+    // The approval happened when it happened, which is neither when the task
+    // was written down nor when anything else moved it.
+    expect(before.approvedAt).toBe(approval?.at);
+    expect(before.approvedAt).not.toBe(before.createdAt);
     expect(before.approvedBy).toBe("a-reviewer");
     expect(approval?.from).toBe("awaiting_approval");
     expect(approval?.to).toBe("awaiting_approval");
@@ -325,6 +355,31 @@ describe("transitionTask", () => {
     });
     expect(task.agentId).toBe("cleaner");
     expect(task.contextPath).toBe(".harness/state/runs/run-1/agents/cleaner");
+  });
+
+  it("stamps a transition with the instant it happened, not one the task carried", () => {
+    const file = walkTo("cleaning");
+    const before = only(file);
+    const task = only(
+      move(file, {
+        expectedRevision: before.revision,
+        to: "architecture_review",
+        toAgent: "architect",
+      })
+    );
+    const timestamps = task.history.map((record) => record.at);
+
+    expect(task.history.at(-1)?.at).toBe(AT.toISOString());
+    // The three instants the task was already carrying. Stamping a record with
+    // any of them loses when the stage was actually entered, which is the one
+    // question the record exists to answer.
+    expect(timestamps).not.toContain(before.createdAt);
+    expect(timestamps.at(-1)).not.toBe(before.updatedAt);
+    expect(timestamps.at(-1)).not.toBe(timestamps.at(-2));
+    // A history that does not order in time cannot be read as a sequence of
+    // events, however well its revisions are numbered.
+    expect(new Set(timestamps).size).toBe(timestamps.length);
+    expect(timestamps).toEqual([...timestamps].sort());
   });
 
   it("refuses to skip a stage", () => {

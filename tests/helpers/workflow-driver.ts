@@ -21,6 +21,7 @@ import {
   readTaskFile,
   requireTask,
 } from "../../src/tasks/task-file.js";
+import { WORKFLOW_STATES } from "../../src/tasks/task-schema.js";
 import type {
   Task,
   TaskState,
@@ -44,8 +45,24 @@ export const TASK_TITLE = "Add login";
 export const RUN_ID = "run-1";
 export const APPROVED_BY = "a-reviewer";
 
-/** One instant for the whole run, so a recorded history is comparable. */
-export const AT = new Date("2026-08-27T10:00:00.000Z");
+/** When the task is written down. Every stage is entered after it. */
+export const STARTED_AT = new Date("2026-08-27T10:00:00.000Z");
+
+/**
+ * The instant a stage is entered at, derived from the stage itself.
+ *
+ * A run split across two processes has no counter and no clock in common, so
+ * the position in the pipeline is what keeps the instants increasing across
+ * the boundary. One instant for the whole run would be simpler and would make
+ * the history unreadable as a sequence: a transition stamped with the task's
+ * creation time, or with the instant of the handoff before it, would be
+ * indistinguishable from one stamped correctly.
+ */
+export const stageAt = (state: WorkflowState): Date =>
+  new Date(STARTED_AT.getTime() + WORKFLOW_STATES.indexOf(state) * 60_000);
+
+/** The approval, granted while the task waits rather than as it moves on. */
+const APPROVED_AT = new Date(stageAt("awaiting_approval").getTime() + 30_000);
 
 /**
  * The agent that owns each stage, or `null` where none does.
@@ -201,7 +218,7 @@ const handOff = async (
             expectedRevision: task.revision,
             approvedBy: APPROVED_BY,
             ruleSetSha256: ruleSet.sha256,
-            at: AT,
+            at: APPROVED_AT,
           })
         : file;
     const current = requireTask(approved, TASK_ID);
@@ -222,7 +239,7 @@ const handOff = async (
               definition,
               policy: compileAgentPolicy({ agentId: definition.id, ruleSet }),
               ruleSetSha256: ruleSet.sha256,
-              at: AT,
+              at: stageAt(to),
               attempt: entriesInto(current, to) + 1,
               handoff: {
                 fromAgent: current.agentId,
@@ -240,7 +257,7 @@ const handOff = async (
       to,
       toAgent: agentId,
       ruleSetSha256: ruleSet.sha256,
-      at: AT,
+      at: stageAt(to),
       contextPath,
     });
   });
@@ -267,7 +284,7 @@ export const driveWorkflow = async (
         id: TASK_ID,
         title: TASK_TITLE,
         runId: RUN_ID,
-        at: AT,
+        at: STARTED_AT,
       })
     );
   }
