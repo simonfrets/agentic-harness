@@ -27,6 +27,7 @@ export {
   readPackageVersion,
 } from "./harness/package-version.js";
 export { readTextFileIfPresent } from "./harness/read-text-file.js";
+export { writeFileAtomic } from "./harness/atomic-write.js";
 export { resolveProjectRoot } from "./harness/resolve-project-root.js";
 export type { ResolveProjectRootOptions } from "./harness/resolve-project-root.js";
 export { loadHarnessRuleSet } from "./harness/load-harness-rule-set.js";
@@ -218,7 +219,6 @@ export {
   readHarnessTemplateFile,
 } from "./install/harness-templates.js";
 export type { HarnessTemplateFile } from "./install/harness-templates.js";
-export { writeFileAtomic } from "./install/atomic-write.js";
 export {
   INSTALL_MANIFEST_VERSION,
   MANAGED_FILE_KINDS,
@@ -303,6 +303,42 @@ export type {
   DiagnosticStatus,
   HarnessDiagnosis,
 } from "./install/diagnose-harness.js";
+
+export {
+  INTERRUPTED_STATES,
+  TASK_FILE_VERSION,
+  TASK_STATES,
+  WORKFLOW_STATES,
+  projectRelativePathSchema,
+  runIdSchema,
+  taskFailureSchema,
+  taskFileSchema,
+  taskIdSchema,
+  taskSchema,
+  taskStateSchema,
+  transitionRecordSchema,
+} from "./tasks/task-schema.js";
+export type {
+  InterruptedState,
+  Task,
+  TaskFailure,
+  TaskFile,
+  TaskState,
+  TransitionRecord,
+  WorkflowState,
+} from "./tasks/task-schema.js";
+export {
+  TASK_FILE_SOURCE,
+  emptyTaskFile,
+  findTask,
+  readTaskFile,
+  requireTask,
+  taskFilePath,
+  writeTaskFile,
+} from "./tasks/task-file.js";
+export { TASK_LOCK_DEFAULTS, withTaskLock } from "./tasks/task-lock.js";
+export type { TaskLockOptions } from "./tasks/task-lock.js";
+export { updateTaskFile } from "./tasks/update-task-file.js";
 
 export { CLI_COMMANDS, parseCliArguments } from "./cli/parse-cli-arguments.js";
 export type {

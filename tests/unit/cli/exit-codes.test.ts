@@ -47,4 +47,23 @@ describe("CLI exit codes", () => {
       CLI_EXIT_CODES.refused
     );
   });
+
+  it("refuses a rejected task write rather than calling it a broken config", () => {
+    // A stale revision, an illegal transition and a lock another process holds
+    // are all requests the harness understood and deliberately did not carry
+    // out, which is what code 5 means. Only a task that is simply not there is
+    // a question about the state on disk.
+    expect(exitCodeForHarnessError("stale-task-revision")).toBe(
+      CLI_EXIT_CODES.refused
+    );
+    expect(exitCodeForHarnessError("invalid-transition")).toBe(
+      CLI_EXIT_CODES.refused
+    );
+    expect(exitCodeForHarnessError("task-lock-failed")).toBe(
+      CLI_EXIT_CODES.refused
+    );
+    expect(exitCodeForHarnessError("unknown-task")).toBe(
+      CLI_EXIT_CODES.invalidConfig
+    );
+  });
 });

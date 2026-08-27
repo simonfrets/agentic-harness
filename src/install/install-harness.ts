@@ -2,6 +2,7 @@ import { chmodSync, unlinkSync } from "node:fs";
 
 import { loadHooksConfig } from "../config/hooks-config.js";
 import type { HooksConfig } from "../config/hooks-config.js";
+import { writeFileAtomic } from "../harness/atomic-write.js";
 import { HarnessError, describeFailure } from "../harness/harness-error.js";
 import {
   HARNESS_DIRECTORY,
@@ -18,7 +19,6 @@ import { resolveProjectRoot } from "../harness/resolve-project-root.js";
 import { describeCommandResult } from "../processes/command-runner.js";
 import type { CommandRunner } from "../processes/command-runner.js";
 import { compareCodeUnits } from "../rules/hash-rule-set.js";
-import { writeFileAtomic } from "./atomic-write.js";
 import { discoverHookEnvironment } from "./discover-hooks.js";
 import type { HooksPathScope } from "./discover-hooks.js";
 import {

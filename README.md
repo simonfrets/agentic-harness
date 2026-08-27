@@ -19,7 +19,9 @@ the ones the project already had, so a gate runs on an ordinary local commit
 rather than only when someone remembers to invoke it. The two configuration
 files it installs belong to the project and can be edited freely.
 
-Task state and the Codex and Claude adapters are **not** implemented yet.
+Task state is stored in `.harness/tasks.yaml`, which the workflow writes under
+an exclusive lock and an atomic rename. The Codex and Claude adapters are
+**not** implemented yet.
 
 ## Requirements
 

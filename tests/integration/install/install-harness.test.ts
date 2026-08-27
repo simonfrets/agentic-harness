@@ -13,6 +13,7 @@ import type { InstallHarnessResult } from "../../../src/install/install-harness.
 import { readInstallManifest } from "../../../src/install/install-manifest.js";
 import { hashManagedFile } from "../../../src/install/install-manifest.js";
 import { listHarnessTemplateFiles } from "../../../src/install/harness-templates.js";
+import { updateTaskFile } from "../../../src/tasks/update-task-file.js";
 import { captureRejection } from "../../helpers/expect-error.js";
 import {
   at,
@@ -23,6 +24,7 @@ import type {
   FakeCommandRunner,
   PlannedCommandResult,
 } from "../../helpers/fake-command-runner.js";
+import { buildTask } from "../../helpers/tasks.js";
 import {
   createTempDirectory,
   removeTempDirectories,
@@ -190,6 +192,39 @@ describe("installHarness against the real shipped package", () => {
     expect(result.kept).toEqual([]);
     expect(result.orphaned).toEqual([]);
     expect(read(root, "rules/base.yaml")).toContain("id: harness-base");
+  });
+
+  it("leaves task state out of the installation entirely", async () => {
+    // `tasks.yaml` is neither managed nor seeded: the harness rewrites it on
+    // every transition and the project never hand-edits it, so putting it
+    // through the plan would mean either reporting the workflow's own writes
+    // as a conflict or replacing them on the next `init --update`.
+    const root = buildHostProject();
+    const { result } = await install({ root, packageRoot });
+
+    expect(result.created).not.toContain("tasks.yaml");
+    expect(existsSync(join(root, ".harness", "tasks.yaml"))).toBe(false);
+    expect(
+      readInstallManifest(root)?.managedFiles.map((f) => f.path)
+    ).not.toContain("tasks.yaml");
+  });
+
+  it("does not touch task state written between two installs", async () => {
+    const root = buildHostProject();
+
+    await install({ root, packageRoot });
+    await updateTaskFile(root, (file) => ({
+      ...file,
+      tasks: [...file.tasks, buildTask()],
+    }));
+
+    const before = readFileSync(join(root, ".harness", "tasks.yaml"), "utf8");
+    const { result } = await install({ root, packageRoot, update: true });
+
+    expect(result.orphaned).toEqual([]);
+    expect(readFileSync(join(root, ".harness", "tasks.yaml"), "utf8")).toBe(
+      before
+    );
   });
 
   it("renames the undotted gitignore template on the way in", async () => {

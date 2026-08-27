@@ -34,8 +34,12 @@ describe("HarnessError", () => {
       "dependency-install-failed",
       "git-config-failed",
       "invalid-config",
+      "invalid-transition",
       "not-a-git-repository",
       "not-installed",
+      "stale-task-revision",
+      "task-lock-failed",
+      "unknown-task",
       "unsafe-hook-chain",
       "unsafe-overwrite",
     ]);

@@ -172,6 +172,9 @@ describe("the shipped .gitignore", () => {
       ".harness/debug.log",
       ".harness/install.tmp",
       ".harness/harness.lock",
+      // `proper-lockfile` puts the task lock beside the file it guards, so the
+      // one thing that must stay tracked has an untracked sibling.
+      ".harness/tasks.yaml.lock",
     ]) {
       expect(isIgnored(root, path)).toBe(true);
     }
