@@ -9,7 +9,10 @@ import {
   nextWorkflowState,
   pendingStages,
 } from "../../../src/tasks/workflow.js";
-import { WORKFLOW_STATES } from "../../../src/tasks/task-schema.js";
+import {
+  INTERRUPTED_STATES,
+  WORKFLOW_STATES,
+} from "../../../src/tasks/task-schema.js";
 import { buildTask } from "../../helpers/tasks.js";
 
 describe("the pipeline", () => {
@@ -103,14 +106,21 @@ describe("allowedTransitions", () => {
     expect(failed).not.toContain("failed");
   });
 
-  it("never lets recovery reach completed", () => {
-    for (const state of ACTIVE_STATES) {
-      for (const interrupted of ["blocked", "failed"] as const) {
-        expect(
-          allowedTransitions(
-            buildTask({ state: interrupted, interruptedFrom: state })
-          )
-        ).not.toContain("completed");
+  it("never lets recovery reach completed, or any stage past the interruption", () => {
+    // `interruptedFrom` is validated as an active stage, so this loop is the
+    // whole domain of it: there is no ninth value a hand-edited `tasks.yaml`
+    // could name to widen the slice past the stage the task stopped in. It
+    // used to accept all eleven states, and `completed` opened the pipeline.
+    for (const stoppedIn of ACTIVE_STATES) {
+      for (const interrupted of INTERRUPTED_STATES) {
+        const allowed = allowedTransitions(
+          buildTask({ state: interrupted, interruptedFrom: stoppedIn })
+        );
+
+        expect(allowed).not.toContain(TERMINAL_STATE);
+        expect(allowed.filter((target) => !isInterruptedState(target))).toEqual(
+          ACTIVE_STATES.slice(0, ACTIVE_STATES.indexOf(stoppedIn) + 1)
+        );
       }
     }
   });

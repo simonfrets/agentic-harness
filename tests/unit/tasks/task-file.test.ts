@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { stringify } from "yaml";
+
 import { HarnessError } from "../../../src/harness/harness-error.js";
 import {
   TASK_FILE_SOURCE,
@@ -74,6 +76,31 @@ describe("readTaskFile", () => {
 
     expect(error.kind).toBe("invalid-config");
     expect(error.message).toContain(".harness/tasks.yaml");
+  });
+
+  it("refuses a task interrupted in a state no work happens in", () => {
+    // `tasks.yaml` is committed on purpose, so a hand edit or a merge conflict
+    // is all it takes to write this. Recovery is computed as the stages up to
+    // and including the one named here, so `completed` would open the entire
+    // pipeline and let a task reach done without entering `implementing` or
+    // `qa`.
+    const root = buildHarnessProject({
+      files: {
+        ".harness/tasks.yaml": stringify({
+          version: 1,
+          tasks: [
+            buildTask({
+              state: "blocked",
+              interruptedFrom: "completed" as "qa",
+            }),
+          ],
+        }),
+      },
+    });
+    const error = captureError(() => readTaskFile(root), HarnessError);
+
+    expect(error.kind).toBe("invalid-config");
+    expect(error.details.join("\n")).toContain("interruptedFrom");
   });
 
   it("refuses task state that does not validate", () => {

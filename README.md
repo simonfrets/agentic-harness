@@ -439,6 +439,12 @@ in or any stage before it, and never one after: that is what lets QA send work
 back to the coder without letting anything skip a stage it has not run. A
 blocked task may still be given up on; a failed one is already there.
 
+The stage a task stopped in is recorded as one of the eight active stages, and
+never as `completed`, `blocked` or `failed`. Recovery is the stages up to and
+including that one, and `tasks.yaml` is committed and hand-editable, so a file
+naming `completed` there would bound recovery by the end of the pipeline and
+let a task be walked to done without entering `implementing` or `qa`.
+
 The coder cannot start before the specification is approved. Approval is its
 own revision - a separate act by a separate caller - so it can never be granted
 by the same call that starts the work. Sending a task back to `draft` or

@@ -1,22 +1,28 @@
-import { INTERRUPTED_STATES, WORKFLOW_STATES } from "./task-schema.js";
-import type { Task, TaskState, WorkflowState } from "./task-schema.js";
-
-/** The one state a task never leaves. */
-export const TERMINAL_STATE = "completed" as const;
+import {
+  ACTIVE_STATES,
+  INTERRUPTED_STATES,
+  TERMINAL_STATE,
+  WORKFLOW_STATES,
+} from "./task-schema.js";
+import type {
+  ActiveState,
+  Task,
+  TaskState,
+  WorkflowState,
+} from "./task-schema.js";
 
 /**
- * The pipeline states a task can still be working in.
- *
- * `completed` is excluded because nothing is in progress there, which is what
- * makes "every active state may transition to `blocked` or `failed`" a rule
- * about eight states rather than nine.
+ * Re-exported rather than defined here: `interruptedFrom` has to be validated
+ * as an active stage, so the vocabulary has to exist beside the schema. This
+ * is still where the pipeline is reasoned about.
  */
-export const ACTIVE_STATES: readonly WorkflowState[] = WORKFLOW_STATES.filter(
-  (state) => state !== TERMINAL_STATE
-);
+export { ACTIVE_STATES, TERMINAL_STATE };
 
 export const isWorkflowState = (state: TaskState): state is WorkflowState =>
   (WORKFLOW_STATES as readonly TaskState[]).includes(state);
+
+export const isActiveState = (state: TaskState): state is ActiveState =>
+  (ACTIVE_STATES as readonly TaskState[]).includes(state);
 
 export const isInterruptedState = (state: TaskState): boolean =>
   (INTERRUPTED_STATES as readonly TaskState[]).includes(state);
@@ -24,23 +30,21 @@ export const isInterruptedState = (state: TaskState): boolean =>
 /**
  * Where in the pipeline a task stands.
  *
- * A blocked or failed task is not nowhere: it is stopped at the state it was
+ * A blocked or failed task is not nowhere: it is stopped at the stage it was
  * interrupted in, and that is the stage a resumed run has to pick up. A task
  * whose `interruptedFrom` is somehow missing is treated as being at the start,
  * which re-runs work rather than skipping it.
+ *
+ * The stage can only ever be an active one, because that is all the schema
+ * accepts. That is what bounds every slice below by a stage the task could
+ * really have stopped in.
  */
 export const currentStage = (task: Task): WorkflowState => {
   if (isWorkflowState(task.state)) {
     return task.state;
   }
 
-  const interrupted = task.interruptedFrom;
-
-  if (interrupted !== null && isWorkflowState(interrupted)) {
-    return interrupted;
-  }
-
-  return WORKFLOW_STATES[0];
+  return task.interruptedFrom ?? WORKFLOW_STATES[0];
 };
 
 const stageIndex = (state: WorkflowState): number =>

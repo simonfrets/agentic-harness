@@ -125,6 +125,28 @@ describe("taskSchema", () => {
     );
   });
 
+  it("refuses an interruption recorded in a state no work happens in", () => {
+    // Recovery is computed as the stages up to and including this one, so
+    // `completed` would open the whole pipeline. `blocked` and `failed` are
+    // refused with it, because neither is a stage any work happened in.
+    for (const interruptedFrom of ["completed", "blocked", "failed"] as const) {
+      expect(
+        taskSchema.safeParse(
+          buildTask({
+            state: "blocked",
+            interruptedFrom: interruptedFrom as "qa",
+          })
+        ).success
+      ).toBe(false);
+    }
+
+    expect(
+      taskSchema.safeParse(
+        buildTask({ state: "blocked", interruptedFrom: "qa" })
+      ).success
+    ).toBe(true);
+  });
+
   it("refuses a state it has no transition rules for", () => {
     expect(
       taskSchema.safeParse(buildTask({ state: "in_review" as "draft" })).success

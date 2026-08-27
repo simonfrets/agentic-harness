@@ -38,6 +38,38 @@ export type WorkflowState = (typeof WORKFLOW_STATES)[number];
 export type InterruptedState = (typeof INTERRUPTED_STATES)[number];
 export type TaskState = z.output<typeof taskStateSchema>;
 
+/** The one state a task never leaves. */
+export const TERMINAL_STATE = "completed" as const;
+
+/** A pipeline state work can still be going on in. */
+export type ActiveState = Exclude<WorkflowState, typeof TERMINAL_STATE>;
+
+/**
+ * The pipeline states a task can still be working in.
+ *
+ * `completed` is excluded because nothing is in progress there, which is what
+ * makes "every active state may transition to `blocked` or `failed`" a rule
+ * about eight states rather than nine. It lives here rather than beside the
+ * workflow functions because the schema below has to be able to say that a
+ * task was interrupted in one of these and in nothing else.
+ */
+export const ACTIVE_STATES: readonly ActiveState[] = WORKFLOW_STATES.filter(
+  (state): state is ActiveState => state !== TERMINAL_STATE
+);
+
+/**
+ * The stage a task stopped in, as recorded by a blocked or failed one.
+ *
+ * Deliberately narrower than `taskStateSchema`. `tasks.yaml` is committed and
+ * meant to be read in a pull request, so a hand edit or a merge conflict can
+ * put any state here, and recovery is computed as the stages up to and
+ * including this one: `completed` would open the entire pipeline, so a task
+ * could be walked straight to done without ever entering `implementing` or
+ * `qa`. `blocked` and `failed` are refused with it, because neither is a stage
+ * any work happened in.
+ */
+const activeStateSchema = z.enum(ACTIVE_STATES);
+
 const TASK_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export const taskIdSchema = z
@@ -150,8 +182,8 @@ const taskShape = z.strictObject({
    */
   approvedAt: timestampSchema.nullable().default(null),
   approvedBy: z.string().min(1).nullable().default(null),
-  /** The state a blocked or failed task was interrupted in. */
-  interruptedFrom: taskStateSchema.nullable().default(null),
+  /** The stage a blocked or failed task was interrupted in. */
+  interruptedFrom: activeStateSchema.nullable().default(null),
   /** The context the current agent was handed. */
   contextPath: projectRelativePathSchema.nullable().default(null),
   history: z.array(transitionRecordSchema).default([]),

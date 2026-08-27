@@ -128,6 +128,7 @@ const PUBLIC_API = [
   "installHarness",
   "installManifestSchema",
   "installRuntimeDependencies",
+  "isActiveState",
   "isBuiltInAgentId",
   "isInterruptedState",
   "isSeededTemplate",

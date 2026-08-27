@@ -13,7 +13,7 @@ import type {
 } from "./task-schema.js";
 import {
   allowedTransitions,
-  currentStage,
+  isActiveState,
   isInterruptedState,
 } from "./workflow.js";
 
@@ -286,6 +286,12 @@ export const transitionTask = (
       : task.runId;
   // Re-specifying invalidates the approval: what was approved no longer exists.
   const clearsApproval = request.to === "draft" || request.to === "specified";
+  // The stage an interruption stopped in. `blocked -> failed` keeps whatever
+  // the task already recorded, because the move to `failed` happened in
+  // `blocked` rather than in a stage of its own.
+  const stoppedIn = isActiveState(task.state)
+    ? task.state
+    : task.interruptedFrom;
 
   const record: TransitionRecord = {
     revision,
@@ -315,7 +321,7 @@ export const transitionTask = (
         updatedAt: at,
         approvedAt: clearsApproval ? null : task.approvedAt,
         approvedBy: clearsApproval ? null : task.approvedBy,
-        interruptedFrom: interrupting ? currentStage(task) : null,
+        interruptedFrom: interrupting ? stoppedIn : null,
         contextPath,
         history: [...task.history, record],
       },

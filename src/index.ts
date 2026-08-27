@@ -319,6 +319,7 @@ export {
   transitionRecordSchema,
 } from "./tasks/task-schema.js";
 export type {
+  ActiveState,
   InterruptedState,
   Task,
   TaskFailure,
@@ -345,6 +346,7 @@ export {
   allowedTransitions,
   completedStages,
   currentStage,
+  isActiveState,
   isInterruptedState,
   isWorkflowState,
   nextWorkflowState,
