@@ -182,6 +182,25 @@ describe("writeAgentContext", () => {
 });
 
 describe("readAgentContext", () => {
+  it.each([
+    ["a parent segment", "../outside-context"],
+    ["a parent segment after a valid prefix", ".harness/../../outside"],
+    ["an absolute path", "/etc"],
+  ])("refuses a context path that leaves the project: %s", (_label, path) => {
+    // A context says which files an agent may write, so loading one from
+    // outside the project is how a hand-edited `tasks.yaml` would hand an
+    // agent write scopes nobody in this repository chose. `writeAgentContext`
+    // cannot reach here - it builds its path from validated identifiers - but
+    // `readAgentContext` is a public export taking a string from its caller.
+    const error = captureError(
+      () => readAgentContext(buildHarnessProject(), path),
+      HarnessError
+    );
+
+    expect(error.kind).toBe("invalid-config");
+    expect(error.message).toContain("inside this project");
+  });
+
   it("round-trips what was written", () => {
     const root = buildHarnessProject();
     const written = context(definition("coder"), {

@@ -78,7 +78,8 @@ export type AgentContext = z.output<typeof agentContextSchema>;
  *
  * The run and the agent are both in the path, which is what makes a context
  * per agent per run rather than one the pipeline passes along and edits. Both
- * segments are validated identifiers, so neither can climb out of `state/`.
+ * segments are validated identifiers, so neither can climb out of `state/` -
+ * and a path arriving from anywhere else is checked before it is resolved.
  *
  * Being a function of the run id and the agent id - both of which `tasks.yaml`
  * carries, and `tasks.yaml` is committed - the path means the same thing on
@@ -99,13 +100,33 @@ export const agentContextFile = (runId: string, agentId: string): string =>
   posix.join(agentContextDirectory(runId, agentId), AGENT_CONTEXT_FILE);
 
 /**
- * Resolves a recorded context path against a project.
+ * Resolves a recorded context path against a project, refusing to leave it.
  *
  * The recorded form already starts at `.harness`, because that is what
  * `tasks.yaml` has to carry to mean the same thing on the next machine.
+ *
+ * The guard is here rather than at one call site because the two callers reach
+ * this from opposite directions. `writeAgentContext` builds its path from a run
+ * id and an agent id the schema has already validated, so it cannot escape.
+ * `readAgentContext` is handed a string by whoever holds it, and is a public
+ * export whose intended consumer is a runtime that has not been written yet: a
+ * `..` segment in a hand-edited `tasks.yaml` would otherwise load a context
+ * from outside the project entirely, and a context is what says which files an
+ * agent may write.
  */
-const absoluteContextPath = (projectRoot: string, relative: string): string =>
-  join(projectRoot, ...relative.split(posix.sep));
+const absoluteContextPath = (projectRoot: string, relative: string): string => {
+  const validated = projectRelativePathSchema.safeParse(relative);
+
+  if (!validated.success) {
+    throw new HarnessError(
+      "invalid-config",
+      `\`${relative}\` is not a context path inside this project`,
+      validated.error.issues.map((issue) => issue.message)
+    );
+  }
+
+  return join(projectRoot, ...relative.split(posix.sep));
+};
 
 export interface BuildAgentContextInput {
   readonly task: Task;
