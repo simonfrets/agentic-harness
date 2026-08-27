@@ -20,9 +20,12 @@ rather than only when someone remembers to invoke it. The two configuration
 files it installs belong to the project and can be edited freely.
 
 Task state, the workflow state machine and per-agent handoff contexts are
-implemented: `.harness/tasks.yaml` records every transition under an exclusive
-lock, and each handoff writes the next agent an isolated context. The Codex and
-Claude adapters are **not** implemented yet, so nothing invokes an agent: the
+implemented: a transition is recorded into `.harness/tasks.yaml` through
+`updateTaskFile`, which holds an exclusive lock across the whole
+read-change-write, and a context is written per run and per agent. Pairing the
+two - writing the next agent's context and recording the transition that points
+at it - is the runtime's job, and there is no runtime: the Codex and Claude
+adapters are **not** implemented yet, so nothing invokes an agent and the
 workflow is driven through the library.
 
 ## Requirements
@@ -445,11 +448,15 @@ including that one, and `tasks.yaml` is committed and hand-editable, so a file
 naming `completed` there would bound recovery by the end of the pipeline and
 let a task be walked to done without entering `implementing` or `qa`.
 
-The coder cannot start before the specification is approved. Approval is its
-own revision - a separate act by a separate caller - so it can never be granted
-by the same call that starts the work. Sending a task back to `draft` or
-`specified` withdraws it, because an approval of a specification that has since
-been rewritten approves nothing.
+The coder cannot start before the specification is approved. Approval is a
+separate act taking a revision of its own, so it can never be granted by the
+same call that starts the work, and a move to `implementing` is refused until
+one is recorded. What is not enforced is who granted it: `approvedBy` is a free
+string, recorded and never checked, and nothing compares it with whoever asks
+for the transition that starts the coder. The separation the harness holds is
+between the two acts, not between two identities. Sending a task back to
+`draft` or `specified` withdraws the approval, because an approval of a
+specification that has since been rewritten approves nothing.
 
 ### `.harness/tasks.yaml`
 
@@ -465,10 +472,21 @@ and where the next agent's context was written. A write whose expected revision
 no longer matches is refused, so two agents handed the same snapshot cannot
 both compute the next revision and have the second erase the first.
 
-Reads and writes go through one lock, held across the whole read-change-write.
-The lock is `proper-lockfile`'s; the file itself is replaced through a
-temporary sibling, an `fsync` and an atomic rename. Its `.lock` sibling is
-covered by the shipped `.gitignore`.
+One call takes the lock: `updateTaskFile` holds it across the whole
+read-change-write, so the file is read, the next revision decided and written
+back without another process getting in between. The lock is
+`proper-lockfile`'s; the file itself is replaced through a temporary sibling,
+an `fsync` and an atomic rename. Its `.lock` sibling is covered by the shipped
+`.gitignore`.
+
+`readTaskFile` and `writeTaskFile` are the unlocked primitives it is built
+from, and both are exported. A read on its own is whole, because a write lands
+by rename and nothing observes half a file, but it is a snapshot and it takes
+no lock. Pairing the two by hand takes neither the lock nor the
+expected-revision check, so a transition another harness process recorded in
+between is erased with no error to show for it: the guarantee is a property of
+`updateTaskFile`, not of the file. Anything that changes a task goes through
+it.
 
 ### Agent contexts
 
@@ -483,6 +501,14 @@ the rule set in force, the rule-set hash, and what the previous agent left
 behind. There is no shared, mutable context object: the run and the agent are
 both in the path, each read parses the file again, and what comes back is
 frozen.
+
+Writing that context and recording the transition that points at it are two
+calls, `writeAgentContext` and `transitionTask`, and the harness does not
+couple them: `contextPath` is optional on a transition and defaults to none,
+which is what a move into a stage no agent owns records. Ordering them -
+context first, then the transition naming it - belongs to whatever drives the
+workflow, and that is Milestone D. Today the only driver is the library's own
+test driver.
 
 A retry out of `failed` starts a new run id, so the attempt being made cannot
 overwrite the record of the one it is replacing. Resuming a `blocked` task

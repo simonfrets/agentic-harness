@@ -55,6 +55,12 @@ export const emptyTaskFile = (): TaskFile => ({
  * `tasks.yaml` is not installed by `harness init`: it is neither a managed
  * file the harness reconciles nor a seeded one the project owns, so it never
  * goes through the installation plan. The first transition creates it.
+ *
+ * It takes no lock. What comes back is whole - a write lands by atomic rename,
+ * so nothing ever observes half a document - but it is a snapshot, and another
+ * process may record a transition before the caller has finished deciding
+ * anything from it. A caller that goes on to change what it read must do so
+ * through `updateTaskFile`, which reads again under the lock.
  */
 export const readTaskFile = (projectRoot: string): TaskFile => {
   const text = readTextFileIfPresent(taskFilePath(projectRoot));
@@ -72,6 +78,14 @@ export const readTaskFile = (projectRoot: string): TaskFile => {
  * The state is validated on the way out as well as on the way in. A workflow
  * that wrote a task file it could not read back would fail on the next run,
  * somewhere unrelated, with no record of which write produced it.
+ *
+ * It takes no lock and checks no revision: it writes the document it is given
+ * over whatever is there. Reading with `readTaskFile` and then writing with
+ * this is the lost-update race the expected-revision check exists to catch,
+ * and neither call consults that revision, so a transition another harness
+ * process recorded in the window between them is erased silently.
+ * `updateTaskFile` is the read-change-write that holds the lock across both;
+ * this is for a caller that already holds it.
  */
 export const writeTaskFile = (projectRoot: string, file: TaskFile): void => {
   const result = taskFileSchema.safeParse(file);
