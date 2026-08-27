@@ -100,6 +100,11 @@ export const transitionRecordSchema = z.strictObject({
   revision: z.int().min(1),
   /** The revision its writer expected to find. A mismatch is rejected. */
   expectedRevision: z.int().min(1),
+  /**
+   * `from` equals `to` for exactly one kind of record: the approval of a
+   * specification, which changes no state but does take a revision, so that
+   * the history covers every revision the task has had.
+   */
   from: taskStateSchema,
   to: taskStateSchema,
   /** Null where no agent owned the state, as `draft` never does. */
@@ -117,7 +122,7 @@ export const transitionRecordSchema = z.strictObject({
   contextPath: projectRelativePathSchema.nullable().default(null),
 });
 
-export const taskSchema = z.strictObject({
+const taskShape = z.strictObject({
   id: taskIdSchema,
   title: z.string().min(1),
   state: taskStateSchema,
@@ -130,19 +135,39 @@ export const taskSchema = z.strictObject({
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
   /**
-   * When the specification was approved, or null.
+   * When the specification was approved, and by whom, or null for neither.
    *
    * The coder cannot start before explicit approval, so this is a stored fact
    * rather than something inferred from having reached `awaiting_approval`.
-   * Re-entering the specification states clears it: an approval granted for a
-   * specification that has since been rewritten approves nothing.
+   * It is set by its own revision, so entering `implementing` can require that
+   * approval already existed rather than accepting it from the same caller in
+   * the same act. Re-entering the specification states clears it: an approval
+   * granted for a specification that has since been rewritten approves
+   * nothing.
    */
   approvedAt: timestampSchema.nullable().default(null),
+  approvedBy: z.string().min(1).nullable().default(null),
   /** The state a blocked or failed task was interrupted in. */
   interruptedFrom: taskStateSchema.nullable().default(null),
   /** The context the current agent was handed. */
   contextPath: projectRelativePathSchema.nullable().default(null),
   history: z.array(transitionRecordSchema).default([]),
+});
+
+/**
+ * An approval is one fact, so half of it is not a state the file may record.
+ * Reading `approvedAt` without knowing who granted it would leave the audit
+ * trail unable to answer the only question it exists for.
+ */
+export const taskSchema = taskShape.superRefine((task, ctx) => {
+  if ((task.approvedAt === null) !== (task.approvedBy === null)) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["approvedBy"],
+      message:
+        "`approvedAt` and `approvedBy` are one fact: record both or neither",
+    });
+  }
 });
 
 export const TASK_FILE_VERSION = 1;

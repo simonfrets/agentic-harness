@@ -17,6 +17,7 @@ export const buildTask = (overrides: Partial<Task> = {}): Task => ({
   createdAt: "2026-08-27T00:00:00.000Z",
   updatedAt: "2026-08-27T00:00:00.000Z",
   approvedAt: null,
+  approvedBy: null,
   interruptedFrom: null,
   contextPath: null,
   history: [],

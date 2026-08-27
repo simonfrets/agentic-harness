@@ -56,6 +56,7 @@ describe("readTaskFile", () => {
         revision: 4,
         agentId: "coder",
         approvedAt: "2026-08-27T00:02:00.000Z",
+        approvedBy: "a-reviewer",
         contextPath: ".harness/state/runs/run-1/agents/coder",
       })
     );

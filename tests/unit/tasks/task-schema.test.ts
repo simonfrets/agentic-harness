@@ -156,3 +156,25 @@ describe("taskFileSchema", () => {
     expect(result.error?.issues[0]?.message).toContain("more than once");
   });
 });
+
+describe("approval", () => {
+  it("refuses half an approval", () => {
+    // Knowing that something was approved without knowing who approved it
+    // cannot answer the only question an audit trail exists for.
+    for (const half of [
+      { approvedAt: "2026-08-27T00:02:00.000Z", approvedBy: null },
+      { approvedAt: null, approvedBy: "a-reviewer" },
+    ]) {
+      expect(taskSchema.safeParse(buildTask(half)).success).toBe(false);
+    }
+
+    expect(
+      taskSchema.safeParse(
+        buildTask({
+          approvedAt: "2026-08-27T00:02:00.000Z",
+          approvedBy: "a-reviewer",
+        })
+      ).success
+    ).toBe(true);
+  });
+});

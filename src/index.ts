@@ -339,6 +339,28 @@ export {
 export { TASK_LOCK_DEFAULTS, withTaskLock } from "./tasks/task-lock.js";
 export type { TaskLockOptions } from "./tasks/task-lock.js";
 export { updateTaskFile } from "./tasks/update-task-file.js";
+export {
+  ACTIVE_STATES,
+  TERMINAL_STATE,
+  allowedTransitions,
+  completedStages,
+  currentStage,
+  isInterruptedState,
+  isWorkflowState,
+  nextWorkflowState,
+  pendingStages,
+} from "./tasks/workflow.js";
+export {
+  approveSpecification,
+  createDefaultRunId,
+  createTask,
+  transitionTask,
+} from "./tasks/transition-task.js";
+export type {
+  ApproveSpecificationRequest,
+  CreateTaskRequest,
+  TransitionRequest,
+} from "./tasks/transition-task.js";
 
 export { CLI_COMMANDS, parseCliArguments } from "./cli/parse-cli-arguments.js";
 export type {
