@@ -1,6 +1,9 @@
 import {
   chmodSync,
+  closeSync,
+  fsyncSync,
   mkdirSync,
+  openSync,
   renameSync,
   rmSync,
   writeFileSync,
@@ -15,6 +18,13 @@ import { dirname, join } from "node:path";
  * written managed file, and an interrupted install leaves the previous version
  * intact rather than a truncated one. The temporary lives in the destination
  * directory because a rename across filesystems is a copy, which is not atomic.
+ *
+ * The content is flushed with `fsync` before the rename, which is what
+ * `write-file-atomic` does and for the same reason: the rename publishes the
+ * new content, and a file renamed into place while its blocks are still only
+ * in the page cache can come back empty after a crash. `tasks.yaml` is written
+ * continuously by a running workflow, so that is the difference between losing
+ * an install and losing the record of what has already been done.
  *
  * The mode is applied with `chmod` rather than left to `writeFileSync`, whose
  * `mode` is masked by the process umask — an executable hook that came out
@@ -32,7 +42,15 @@ export const writeFileAtomic = (
   const temporary = join(directory, `.harness-${randomUUID()}.tmp`);
 
   try {
-    writeFileSync(temporary, contents);
+    const handle = openSync(temporary, "w");
+
+    try {
+      writeFileSync(handle, contents);
+      fsyncSync(handle);
+    } finally {
+      closeSync(handle);
+    }
+
     chmodSync(temporary, mode);
     renameSync(temporary, path);
   } catch (error: unknown) {

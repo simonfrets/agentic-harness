@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { loadYamlConfig } from "../config/load-yaml-config.js";
+import { projectRelativeGlobSchema } from "../harness/project-path.js";
 import { projectScriptNameSchema } from "../rules/rule-schema.js";
 import { agentIdSchema } from "./agent-id.js";
 
@@ -41,8 +42,12 @@ const agentDefinitionShape = z.strictObject({
   /**
    * Globs the agent may write, relative to the project root. An empty list
    * means the agent writes no project file at all.
+   *
+   * Held to the project boundary rather than to `min(1)`: this is what the
+   * runtime reads to decide which files the agent may change, so a scope that
+   * leaves the project grants what it names.
    */
-  writeScopes: z.array(z.string().min(1)).default([]),
+  writeScopes: z.array(projectRelativeGlobSchema).default([]),
   /** Semantic project scripts the agent may run. Never an arbitrary command. */
   projectScripts: z.array(projectScriptNameSchema).default([]),
 });

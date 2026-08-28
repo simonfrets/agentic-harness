@@ -19,7 +19,14 @@ the ones the project already had, so a gate runs on an ordinary local commit
 rather than only when someone remembers to invoke it. The two configuration
 files it installs belong to the project and can be edited freely.
 
-Task state and the Codex and Claude adapters are **not** implemented yet.
+Task state, the workflow state machine and per-agent handoff contexts are
+implemented: a transition is recorded into `.harness/tasks.yaml` through
+`updateTaskFile`, which holds an exclusive lock across the whole
+read-change-write, and a context is written per run and per agent. Pairing the
+two - writing the next agent's context and recording the transition that points
+at it - is the runtime's job, and there is no runtime: the Codex and Claude
+adapters are **not** implemented yet, so nothing invokes an agent and the
+workflow is driven through the library.
 
 ## Requirements
 
@@ -383,6 +390,17 @@ Otherwise the runtime has two answers about what an agent may change, and
 whichever it happens to read becomes the real policy by accident. The same
 applies to `execute` and `projectScripts`.
 
+A write scope stays inside the project. `/etc/**` and `../**` are refused, and
+so are `{..,src}/**`, `@(..|src)/**` and `[.][.]/**`, which name a path outside
+the project without containing a `..` segment of their own - `minimatch` matches
+`../outside.txt` against all three, and `!(src)/**` reaches `/etc/passwd`. The
+wildcards left are `*`, `**` and `?`: checking where an alternation could expand
+to means expanding it, and two scopes say what one alternation was trying to.
+This is the same boundary the `artifactPaths` and `contextPath` recorded in
+`tasks.yaml` are held to, and it matters more here, because a recorded path is a
+diagnostic and a write scope is what the runtime will read to decide which files
+an agent may change.
+
 `config/project.yaml` carries only the two decisions discovery cannot make: the
 validation mode, and a pinned package manager for a repository that carries two
 lockfiles. `discoverProjectProfile` reads the installed copy, and a pin there
@@ -420,9 +438,172 @@ exercised against a real binary in the test suite; the other three are covered
 by argument-vector unit tests, because Yarn and Bun are not assumed to be
 installed.
 
+## Task state and handoffs
+
+A task moves through nine states, in this order:
+
+```text
+draft -> specified -> awaiting_approval -> implementing -> cleaning
+      -> architecture_review -> hardening -> qa -> completed
+```
+
+Every state but `completed` may fall to `blocked` or `failed`, and both demand
+a recorded reason. Recovery out of either may target the stage the task stopped
+in or any stage before it, and never one after: that is what lets QA send work
+back to the coder without letting anything skip a stage it has not run. A
+blocked task may still be given up on; a failed one is already there.
+
+Every state names the agent that owns it, and a transition recording any other
+is refused. `specified` is the specifier's, and `implementing`, `cleaning`,
+`architecture_review`, `hardening` and `qa` belong to the agents they are named
+after. `draft`, `awaiting_approval`, `completed`, `blocked` and `failed` belong
+to nobody: a task in one of them is written down, waiting on a person, finished
+or stopped, and in none of them is an agent running. The recorded agent is what
+a runtime builds the next context from and enforces tools and write scopes
+against, so recording another would run the stage under the wrong policy - the
+coder under QA's `edit: false` and no write scope, or QA with the coder's - and
+both records would otherwise validate. A project-defined agent id is accepted
+everywhere a rule may target one, but it cannot own a pipeline state: the nine
+states are fixed, so there is none spare for a seventh agent.
+
+The stage a task stopped in is recorded as one of the eight active stages, and
+never as `completed`, `blocked` or `failed`. Recovery is the stages up to and
+including that one, and `tasks.yaml` is committed and hand-editable, so a file
+naming `completed` there would bound recovery by the end of the pipeline and
+let a task be walked to done without entering `implementing` or `qa`.
+
+The coder cannot start before the specification is approved. Approval is a
+separate act taking a revision of its own, so it can never be granted by the
+same call that starts the work, and a move to `implementing` is refused until
+one is recorded. What is not enforced is who granted it: `approvedBy` is a free
+string, recorded and never checked, and nothing compares it with whoever asks
+for the transition that starts the coder. The separation the harness holds is
+between the two acts, not between two identities. Sending a task back to
+`draft` or `specified` withdraws the approval, because an approval of a
+specification that has since been rewritten approves nothing.
+
+### `.harness/tasks.yaml`
+
+Task state lives in `.harness/tasks.yaml`, which is deliberately **not**
+ignored: a workflow nobody can review in a pull request is not governed by
+anything. It is neither a managed nor a seeded file, so `harness init` never
+writes it and never reconciles it; the first transition creates it.
+
+The transition creates the file, not the directory holding it. Taking the task
+lock against a project with no `.harness` reports `not-installed` and creates
+nothing, because that directory is what `harness init` installs: creating it
+here would leave a `.harness` holding task state and no agents, rules or hooks
+behind any task call made against any path.
+
+Every transition records the revision it produced and the revision its writer
+expected, the source and target agent, the resolved rule-set SHA-256, gate
+report ids and artifact paths, the timestamp, the attempt number, any failure,
+and where the next agent's context was written. A write whose expected revision
+no longer matches is refused, so two agents handed the same snapshot cannot
+both compute the next revision and have the second erase the first.
+
+One call takes the lock: `updateTaskFile` holds it across the whole
+read-change-write, so the file is read, the next revision decided and written
+back without another process getting in between. The lock is
+`proper-lockfile`'s; the file itself is replaced through a temporary sibling,
+an `fsync` and an atomic rename. Its `.lock` sibling is covered by the shipped
+`.gitignore`.
+
+A harness killed while holding that lock leaves it behind, and the only thing
+that says nobody holds it is its age. The window it stays honoured for is two
+seconds - the shortest `proper-lockfile` implements, and far longer than the
+read-change-write it covers - and acquiring waits out roughly 2.8 seconds, so
+an abandoned lock is normally taken over rather than reported as contention.
+Waiting less would leave `harness gate pre-commit` failing, and a failing gate
+blocks commits, for as long as the window lasts.
+
+Normally, not always. `proper-lockfile` measures the filesystem's mtime
+precision on its first acquisition in a process, and does it by stamping the
+lock up to about a second into the future. A lock abandoned by a process that
+was killed within that first heartbeat can therefore read as up to three
+seconds old rather than two, which outlasts the 2.8 seconds of waiting. The
+loser is told another process holds a lock that nobody holds. Retrying once
+clears it; the honest statement is that the budget covers the ordinary case and
+not the worst one.
+
+Contention is reported as contention, and nothing else is. `proper-lockfile`
+raises `ELOCKED` for a lock another process is genuinely holding; anything else
+that stops the lock being taken - a `.harness` the process cannot write, a full
+filesystem, a `.harness` that is not a directory - is reported as a lock that
+could not be taken, with the cause beneath it. Waiting is the answer to exactly
+one of those.
+
+`readTaskFile` and `writeTaskFile` are the unlocked primitives it is built
+from, and both are exported. A read on its own is whole, because a write lands
+by rename and nothing observes half a file, but it is a snapshot and it takes
+no lock. Pairing the two by hand takes neither the lock nor the
+expected-revision check, so a transition another harness process recorded in
+between is erased with no error to show for it: the guarantee is a property of
+`updateTaskFile`, not of the file. Anything that changes a task goes through
+it.
+
+### Agent contexts
+
+Each handoff writes the next agent a context of its own at
+
+```text
+.harness/state/runs/<run-id>/agents/<agent-id>/context.json
+```
+
+carrying that agent's own tool policy and write scopes, the compiled policy for
+the rule set in force, the rule-set hash, and what the previous agent left
+behind. There is no shared, mutable context object: the run and the agent are
+both in the path, each read parses the file again, and what comes back is
+frozen.
+
+Writing that context and recording the transition that points at it are two
+calls, `writeAgentContext` and `transitionTask`, and the harness does not
+couple them: `contextPath` is optional on a transition and defaults to none,
+which is what a move into a stage no agent owns records. Ordering them belongs
+to whatever drives the workflow, and that is Milestone D. Today the only driver
+is the library's own test driver.
+
+Context first and then the transition naming it works for every move that stays
+in the same run. It does **not** work for a retry out of `failed`, and a driver
+that assumes it will overwrite the attempt it is replacing. A retry starts a new
+run, and `transitionTask` mints that id inside the call, so a driver writing the
+context first has only the old run id to write it under - and a context path is
+a function of the run and the agent, so the file lands on top of the failed
+attempt's. The task then carries a `runId` and a `contextPath` that disagree,
+and nothing validates that pair.
+
+A driver retrying a task must therefore mint the run id itself, pass it as
+`newRunId`, and write the context under that. `newRunId` exists for this and
+takes precedence over the default. Nothing enforces it, which is why it is
+written here: the guarantee that an attempt cannot overwrite the record of the
+one it replaces is the caller's to keep, not the library's to give.
+
+Resuming a `blocked` task keeps its run, because nothing was discarded - except
+that recovery may target any stage at or before the interrupted one, so sending
+a task back for rework does discard, and reuses the run it discarded under.
+Rework carries the same overwrite, without even a new run id to reach for.
+
+Everything under `state/` is ignored, so a context is machine-local. That is
+deliberate, and it settles what the `contextPath` recorded in `tasks.yaml`
+means: it is a name, derived from the run id and the agent id the committed
+file already carries, and not a promise that the file behind it exists on the
+machine reading it. A clone made while a task is mid-run gets every one of
+those names and none of those files.
+
+Nothing is lost with them. A context holds the agent's own capabilities and
+write scopes, the compiled policy and the rule-set hash, all derived from
+things that are tracked - the task, the agent definition and the rules - so a
+resumed run writes the context it needs at the path already recorded for it
+rather than needing the copy the machine that made the handoff wrote. Reading
+one that was never written here reports `missing-context`, which is a different
+condition from a context that is damaged and calls for a different answer.
+
+Stopping a run and resuming it - in another process, on another machine, or
+from a fresh clone - therefore needs only `tasks.yaml`: it names the stage the
+task stands at, and the stages already behind it are not run again.
+
 ## Planned modules
 
 - Typed Codex and Claude CLI adapter contract
 - Runtime enforcement of the shipped agent tool policies
-- Atomic `tasks.yaml` state and resumable handoffs
 - Specifier, coder, cleaner, architect, hardener, and QA agents

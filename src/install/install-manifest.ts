@@ -2,9 +2,9 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { z } from "zod";
 
+import { writeFileAtomic } from "../harness/atomic-write.js";
 import { HarnessError } from "../harness/harness-error.js";
 import { HARNESS_PATHS, harnessPath } from "../harness/layout.js";
-import { writeFileAtomic } from "./atomic-write.js";
 
 export const INSTALL_MANIFEST_VERSION = 1;
 const MANIFEST_MODE = 0o644;

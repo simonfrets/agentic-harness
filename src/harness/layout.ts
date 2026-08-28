@@ -30,7 +30,9 @@ export const HARNESS_PATHS = {
   projectConfig: join("config", "project.yaml"),
   rules: "rules",
   runtime: "runtime",
+  runs: join("state", "runs"),
   state: "state",
+  tasks: "tasks.yaml",
 } as const;
 
 /** Resolves a path inside a project's harness directory. */

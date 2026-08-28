@@ -169,9 +169,16 @@ describe("the shipped .gitignore", () => {
     for (const path of [
       ".harness/node_modules/agentic-harness/package.json",
       ".harness/state/runs/run-1/agents/coder/transcript.json",
+      // An agent context is derived from the task, the agent definition and
+      // the rule set, all three of which are tracked, so it is rebuilt on the
+      // machine that needs it rather than committed with the task.
+      ".harness/state/runs/run-1/agents/coder/context.json",
       ".harness/debug.log",
       ".harness/install.tmp",
       ".harness/harness.lock",
+      // `proper-lockfile` puts the task lock beside the file it guards, so the
+      // one thing that must stay tracked has an untracked sibling.
+      ".harness/tasks.yaml.lock",
     ]) {
       expect(isIgnored(root, path)).toBe(true);
     }

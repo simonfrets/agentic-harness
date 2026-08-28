@@ -7,8 +7,13 @@ export const HARNESS_ERROR_KINDS = [
   "dependency-install-failed",
   "git-config-failed",
   "invalid-config",
+  "invalid-transition",
+  "missing-context",
   "not-a-git-repository",
   "not-installed",
+  "stale-task-revision",
+  "task-lock-failed",
+  "unknown-task",
   "unsafe-hook-chain",
   "unsafe-overwrite",
 ] as const;
