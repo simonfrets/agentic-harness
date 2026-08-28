@@ -513,9 +513,18 @@ A harness killed while holding that lock leaves it behind, and the only thing
 that says nobody holds it is its age. The window it stays honoured for is two
 seconds - the shortest `proper-lockfile` implements, and far longer than the
 read-change-write it covers - and acquiring waits out roughly 2.8 seconds, so
-an abandoned lock is always taken over rather than reported as contention.
+an abandoned lock is normally taken over rather than reported as contention.
 Waiting less would leave `harness gate pre-commit` failing, and a failing gate
 blocks commits, for as long as the window lasts.
+
+Normally, not always. `proper-lockfile` measures the filesystem's mtime
+precision on its first acquisition in a process, and does it by stamping the
+lock up to about a second into the future. A lock abandoned by a process that
+was killed within that first heartbeat can therefore read as up to three
+seconds old rather than two, which outlasts the 2.8 seconds of waiting. The
+loser is told another process holds a lock that nobody holds. Retrying once
+clears it; the honest statement is that the budget covers the ordinary case and
+not the worst one.
 
 Contention is reported as contention, and nothing else is. `proper-lockfile`
 raises `ELOCKED` for a lock another process is genuinely holding; anything else
@@ -550,14 +559,29 @@ frozen.
 Writing that context and recording the transition that points at it are two
 calls, `writeAgentContext` and `transitionTask`, and the harness does not
 couple them: `contextPath` is optional on a transition and defaults to none,
-which is what a move into a stage no agent owns records. Ordering them -
-context first, then the transition naming it - belongs to whatever drives the
-workflow, and that is Milestone D. Today the only driver is the library's own
-test driver.
+which is what a move into a stage no agent owns records. Ordering them belongs
+to whatever drives the workflow, and that is Milestone D. Today the only driver
+is the library's own test driver.
 
-A retry out of `failed` starts a new run id, so the attempt being made cannot
-overwrite the record of the one it is replacing. Resuming a `blocked` task
-keeps its run, because nothing was discarded.
+Context first and then the transition naming it works for every move that stays
+in the same run. It does **not** work for a retry out of `failed`, and a driver
+that assumes it will overwrite the attempt it is replacing. A retry starts a new
+run, and `transitionTask` mints that id inside the call, so a driver writing the
+context first has only the old run id to write it under - and a context path is
+a function of the run and the agent, so the file lands on top of the failed
+attempt's. The task then carries a `runId` and a `contextPath` that disagree,
+and nothing validates that pair.
+
+A driver retrying a task must therefore mint the run id itself, pass it as
+`newRunId`, and write the context under that. `newRunId` exists for this and
+takes precedence over the default. Nothing enforces it, which is why it is
+written here: the guarantee that an attempt cannot overwrite the record of the
+one it replaces is the caller's to keep, not the library's to give.
+
+Resuming a `blocked` task keeps its run, because nothing was discarded - except
+that recovery may target any stage at or before the interrupted one, so sending
+a task back for rework does discard, and reuses the run it discarded under.
+Rework carries the same overwrite, without even a new run id to reach for.
 
 Everything under `state/` is ignored, so a context is machine-local. That is
 deliberate, and it settles what the `contextPath` recorded in `tasks.yaml`

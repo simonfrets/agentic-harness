@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { stringify } from "yaml";
@@ -16,7 +16,10 @@ import {
 import { captureError } from "../../helpers/expect-error.js";
 import { buildHarnessProject } from "../../helpers/harness-project.js";
 import { buildTask, buildTaskFile } from "../../helpers/tasks.js";
-import { removeTempDirectories } from "../../helpers/temp-directory.js";
+import {
+  createTempDirectory,
+  removeTempDirectories,
+} from "../../helpers/temp-directory.js";
 
 afterEach(() => {
   removeTempDirectories();
@@ -130,7 +133,10 @@ describe("writeTaskFile", () => {
     expect(text.endsWith("\n")).toBe(true);
   });
 
-  it("creates the harness directory when nothing has been installed yet", () => {
+  it("writes an empty file into a project that has the harness installed", () => {
+    // The name this carried claimed it covered an uninstalled project, while
+    // `buildHarnessProject()` creates `.harness/` before it runs. The case it
+    // claimed is below, and it is not the behaviour the name implied.
     const root = buildHarnessProject();
 
     writeTaskFile(root, emptyTaskFile());
@@ -138,6 +144,23 @@ describe("writeTaskFile", () => {
     expect(
       readFileSync(join(root, ".harness", "tasks.yaml"), "utf8")
     ).toContain("tasks: []");
+  });
+
+  it("creates `.harness/` in a project that has none, unlike the lock", () => {
+    // Documenting a real asymmetry rather than asserting it is correct.
+    // `withTaskLock` refuses a project with no harness installed, on the
+    // reasoning that a directory holding task state and no agents, rules or
+    // hooks is not one anybody asked for. This primitive sits a layer below
+    // that guard and still creates it, so reaching for `writeTaskFile`
+    // directly bypasses the refusal. Anything that changes here should change
+    // deliberately, and the two layers should agree.
+    const root = createTempDirectory("agentic-harness-uninstalled-");
+
+    expect(existsSync(join(root, ".harness"))).toBe(false);
+
+    writeTaskFile(root, emptyTaskFile());
+
+    expect(existsSync(join(root, ".harness", "tasks.yaml"))).toBe(true);
   });
 
   it("refuses to write state that could not be read back", () => {
