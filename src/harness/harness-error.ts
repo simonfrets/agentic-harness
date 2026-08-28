@@ -16,6 +16,7 @@ export const HARNESS_ERROR_KINDS = [
   "unknown-task",
   "unsafe-hook-chain",
   "unsafe-overwrite",
+  "working-tree-audit-failed",
 ] as const;
 
 export type HarnessErrorKind = (typeof HARNESS_ERROR_KINDS)[number];

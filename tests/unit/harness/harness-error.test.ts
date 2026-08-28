@@ -43,6 +43,7 @@ describe("HarnessError", () => {
       "unknown-task",
       "unsafe-hook-chain",
       "unsafe-overwrite",
+      "working-tree-audit-failed",
     ]);
   });
 });
