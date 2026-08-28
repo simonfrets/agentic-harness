@@ -7,6 +7,7 @@ import type { AgentDefinition } from "../agents/agent-definition.js";
 import { z } from "zod";
 
 import { writeFileAtomic } from "../harness/atomic-write.js";
+import { deepFreeze } from "../harness/deep-freeze.js";
 import { HarnessError } from "../harness/harness-error.js";
 import { HARNESS_DIRECTORY, HARNESS_PATHS } from "../harness/layout.js";
 import {
@@ -213,18 +214,6 @@ export const writeAgentContext = (
   );
 
   return agentContextDirectory(context.runId, context.agentId);
-};
-
-const deepFreeze = <T>(value: T): T => {
-  if (typeof value !== "object" || value === null) {
-    return value;
-  }
-
-  for (const entry of Object.values(value)) {
-    deepFreeze(entry);
-  }
-
-  return Object.freeze(value);
 };
 
 /**
