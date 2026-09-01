@@ -81,6 +81,18 @@ describe("CLI exit codes", () => {
     );
   });
 
+  it("refuses a completion whose evidence is missing or whose notification failed", () => {
+    // Both are requests the harness understood and deliberately did not
+    // carry out: the task stays in `qa` until the evidence exists and, under
+    // `onFailure: block`, until somebody was actually told.
+    expect(exitCodeForHarnessError("incomplete-evidence")).toBe(
+      CLI_EXIT_CODES.refused
+    );
+    expect(exitCodeForHarnessError("notification-failed")).toBe(
+      CLI_EXIT_CODES.refused
+    );
+  });
+
   it("refuses a handoff whose working tree could not be audited", () => {
     // Git failing to hash or compare the tree leaves the harness unable to say
     // whether the agent stayed in scope. Accepting the work anyway would be
