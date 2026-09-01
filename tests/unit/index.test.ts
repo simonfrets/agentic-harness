@@ -153,6 +153,7 @@ const PUBLIC_API = [
   "isWorkflowState",
   "killProcessTree",
   "listHarnessTemplateFiles",
+  "listScenarios",
   "loadAgentDefinition",
   "loadHarnessRuleSet",
   "loadHooksConfig",
