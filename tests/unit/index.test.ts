@@ -196,6 +196,7 @@ const PUBLIC_API = [
   "planHooks",
   "planInstallation",
   "portableProjectProfileSchema",
+  "prepareAcceptance",
   "projectConfigSchema",
   "projectProfileSchema",
   "projectRelativeGlobSchema",
