@@ -62,6 +62,15 @@ const INSTALLED: Readonly<Record<string, string>> = {
   ".harness/version.json": MANIFEST(),
   ".harness/config/project.yaml": "version: 1\n",
   ".harness/config/hooks.yaml": HOOKS_YAML,
+  // The command channel: the healthy installation notifies somebody, which
+  // is what lets "every check ok" stay literally true.
+  ".harness/config/notifications.yaml": [
+    "version: 1",
+    "channel: command",
+    "command:",
+    "  argv: [notify-send, done]",
+    "",
+  ].join("\n"),
   ".harness/rules/base.yaml": ruleBundleYaml({
     bundleId: "harness-base",
     ruleId: "base.tests",
@@ -208,12 +217,55 @@ describe("diagnoseHarness on a healthy installation", () => {
       "bash",
       "installation",
       "config",
+      "notifications",
       "rules",
       "scripts",
       "runtime",
       "hooks",
       "ci",
     ]);
+  });
+
+  it("names the command completions are delivered through", async () => {
+    const diagnosis = await diagnose(healthyRoot());
+
+    expect(find(diagnosis, "notifications").status).toBe("ok");
+    expect(find(diagnosis, "notifications").detail).toBe(
+      "completions run `notify-send done`"
+    );
+  });
+
+  it("warns while completions only reach a machine-local log", async () => {
+    for (const files of [
+      // The seeded default...
+      { ".harness/config/notifications.yaml": "version: 1\nchannel: log\n" },
+      // ...and an installation from before the file shipped.
+      undefined,
+    ]) {
+      const root = buildInstalled(
+        files === undefined
+          ? { omit: [".harness/config/notifications.yaml"] }
+          : { files }
+      );
+      const diagnosis = await diagnose(root, { hooksPath: ".harness/hooks" });
+      const entry = find(diagnosis, "notifications");
+
+      expect(entry.status).toBe("warning");
+      expect(entry.detail).toContain("reach nobody");
+      expect(entry.detail).toContain(".harness/config/notifications.yaml");
+    }
+  });
+
+  it("reports a notifications file that asks for something it cannot mean", async () => {
+    const root = buildInstalled({
+      files: {
+        ".harness/config/notifications.yaml": "version: 1\nchannel: command\n",
+      },
+    });
+    const diagnosis = await diagnose(root);
+
+    expect(find(diagnosis, "notifications").status).toBe("problem");
+    expect(find(diagnosis, "notifications").detail).toContain("command.argv");
   });
 
   it("reports the resolved rule set and its hash", async () => {
